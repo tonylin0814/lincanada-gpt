@@ -83,9 +83,15 @@ export async function GET(request: Request, { params }: RouteContext) {
 
     const receiptUrl = `${getBaseUrl(request)}/dashboard/records/receipts/${encodeURIComponent(record)}`;
     await page.goto(receiptUrl, {
-      timeout: 45000,
-      waitUntil: "networkidle2",
+      timeout: 15000,
+      waitUntil: "domcontentloaded",
     });
+
+    await page.waitForSelector("body", { timeout: 5000 });
+    await page.waitForFunction(() => document.fonts.ready, { timeout: 5000 }).catch(
+      () => undefined,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1200));
 
     if (page.url().includes("/login")) {
       return NextResponse.json(

@@ -260,7 +260,7 @@ export function ReceiptRecordClient({
         setError(
           message
             ? `Could not download record PDF. ${message}`
-            : "Could not download record PDF.",
+            : `Could not download record PDF. Server returned ${response.status}.`,
         );
         return;
       }
