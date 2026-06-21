@@ -16,7 +16,7 @@ type UploadFile = {
     | "Selected"
     | "Extracting EXIF"
     | "OCR and matching"
-    | "Ready to process"
+    | "Ready to upload"
     | "Archived"
     | "Error";
   error?: string;
@@ -53,6 +53,12 @@ type UploadClientProps = {
   hasGoogleFolder: boolean;
 };
 
+type UploadSuccess = {
+  linked: number;
+  created: number;
+  records: string[];
+};
+
 export function UploadClient({
   hasGoogleConnection,
   hasGoogleFolder,
@@ -61,9 +67,10 @@ export function UploadClient({
   const [isProcessing, setIsProcessing] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [error, setError] = useState("");
-  const [summary, setSummary] = useState("");
+  const [success, setSuccess] = useState<UploadSuccess | null>(null);
 
   const hasFiles = uploads.length > 0;
+  const readyToUploadCount = uploads.filter((upload) => upload.match_result).length;
 
   const accepted = useMemo(
     () => ".jpg,.jpeg,.png,.heic,.heif,.pdf,image/jpeg,image/png,image/heic,image/heif,application/pdf",
@@ -105,7 +112,7 @@ export function UploadClient({
     if (!hasFiles) return;
 
     setError("");
-    setSummary("");
+    setSuccess(null);
     setIsProcessing(true);
     setUploads((current) =>
       current.map((upload) => ({
@@ -188,7 +195,7 @@ export function UploadClient({
           selected_record_r_number:
             processBody.match_result.match?.record_r_number ??
             processBody.match_result.candidates?.[0]?.record_r_number,
-          status: "Ready to process" as const,
+          status: "Ready to upload" as const,
         };
       }),
     );
@@ -199,10 +206,11 @@ export function UploadClient({
 
   async function confirmAll() {
     setError("");
-    setSummary("");
+    setSuccess(null);
     setIsConfirming(true);
     let linked = 0;
     let created = 0;
+    const uploadedRecords: string[] = [];
     const nextUploads: UploadFile[] = [];
 
     for (const upload of uploads) {
@@ -258,15 +266,20 @@ export function UploadClient({
       };
       if (body.action === "link") linked += 1;
       if (body.action === "create") created += 1;
-      nextUploads.push({
-        ...upload,
-        status: "Archived",
-        archive_result: `${body.record_r_number} archived`,
-      });
+      uploadedRecords.push(body.record_r_number);
+      if (upload.preview_url) {
+        URL.revokeObjectURL(upload.preview_url);
+      }
     }
 
     setUploads(nextUploads);
-    setSummary(`${linked} matched and archived, ${created} new record created`);
+    if (uploadedRecords.length > 0) {
+      setSuccess({
+        linked,
+        created,
+        records: uploadedRecords,
+      });
+    }
     setIsConfirming(false);
   }
 
@@ -313,28 +326,46 @@ export function UploadClient({
       </label>
 
       {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
-      {summary ? <p className="mt-4 text-sm text-foreground/70">{summary}</p> : null}
+      {success ? (
+        <div className="mt-4 border border-green-700 bg-green-50 px-4 py-3 text-sm text-green-950">
+          <p className="text-base font-semibold">Upload Success!</p>
+          <p className="mt-1">
+            {success.linked} matched receipt{success.linked === 1 ? "" : "s"} uploaded,
+            {" "}
+            {success.created} new record{success.created === 1 ? "" : "s"} created.
+          </p>
+          {success.records.length > 0 ? (
+            <p className="mt-1">
+              Saved record{success.records.length === 1 ? "" : "s"}:{" "}
+              {success.records.join(", ")}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
-      <div className="mt-6 flex items-center justify-between gap-4">
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
         <p className="text-sm text-foreground/65">
           {uploads.length} file{uploads.length === 1 ? "" : "s"} selected
+          {readyToUploadCount > 0 ? `, ${readyToUploadCount} ready` : ""}
         </p>
         <button
-          className="h-10 rounded-md bg-foreground px-4 text-sm font-medium text-background disabled:cursor-not-allowed disabled:opacity-60"
+          className="h-12 min-w-36 rounded-md bg-blue-700 px-5 text-sm font-semibold uppercase tracking-wide text-white shadow-sm transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-700/40"
           disabled={!hasFiles || isProcessing}
           onClick={processAll}
           type="button"
         >
-          {isProcessing ? "Processing..." : "Process All"}
+          {isProcessing ? "Uploading..." : "Upload All"}
         </button>
-        <button
-          className="h-10 rounded-md border border-foreground/20 px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={!canConfirm || isConfirming || !hasGoogleFolder}
-          onClick={confirmAll}
-          type="button"
-        >
-          {isConfirming ? "Confirming..." : "Confirm All"}
-        </button>
+        {canConfirm ? (
+          <button
+            className="h-12 min-w-36 rounded-md bg-green-700 px-5 text-sm font-semibold uppercase tracking-wide text-white shadow-sm transition-colors hover:bg-green-800 disabled:cursor-not-allowed disabled:bg-green-700/40"
+            disabled={isConfirming || !hasGoogleFolder}
+            onClick={confirmAll}
+            type="button"
+          >
+            {isConfirming ? "Uploading..." : "Upload Now"}
+          </button>
+        ) : null}
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
