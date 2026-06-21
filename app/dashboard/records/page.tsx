@@ -201,7 +201,7 @@ function ReceiptsTable({ receipts }: { receipts: Receipt[] }) {
             <th className="px-4 py-3 font-medium">Category</th>
             <th className="px-4 py-3 font-medium">Total</th>
             <th className="px-4 py-3 font-medium">Payment Method</th>
-            <th className="px-4 py-3 font-medium">Reviewed</th>
+            <th className="px-4 py-3 font-medium">Uploaded</th>
             <th className="px-4 py-3 font-medium">Actions</th>
           </tr>
         </thead>
@@ -216,7 +216,7 @@ function ReceiptsTable({ receipts }: { receipts: Receipt[] }) {
                 {formatMoney(receipt.grand_total, receipt.currency)}
               </td>
               <td className="px-4 py-3">{receipt.payment_method ?? ""}</td>
-              <td className="px-4 py-3">{receipt.is_reviewed ? "✓" : "✗"}</td>
+              <td className="px-4 py-3">{receipt.attachment_link ? "✓" : "✗"}</td>
               <td className="px-4 py-3">
                 <Link
                   className="underline"
@@ -250,7 +250,7 @@ function InvoicesTable({ invoices }: { invoices: Invoice[] }) {
             <th className="px-4 py-3 font-medium">Category</th>
             <th className="px-4 py-3 font-medium">Total</th>
             <th className="px-4 py-3 font-medium">Payment Method</th>
-            <th className="px-4 py-3 font-medium">Reviewed</th>
+            <th className="px-4 py-3 font-medium">Uploaded</th>
             <th className="px-4 py-3 font-medium">Actions</th>
           </tr>
         </thead>
@@ -265,7 +265,7 @@ function InvoicesTable({ invoices }: { invoices: Invoice[] }) {
                 {formatMoney(invoice.grand_total, invoice.currency)}
               </td>
               <td className="px-4 py-3">{invoice.payment_method ?? ""}</td>
-              <td className="px-4 py-3">{invoice.is_reviewed ? "✓" : "✗"}</td>
+              <td className="px-4 py-3">{invoice.attachment_link ? "✓" : "✗"}</td>
               <td className="px-4 py-3">
                 <Link
                   className="underline"
