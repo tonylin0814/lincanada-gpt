@@ -153,6 +153,34 @@ function getTaxAmount(taxes: JsonValue[] | JsonValue | null, name: string) {
     : "";
 }
 
+function getTaxNames(receipts: Receipt[]) {
+  return Array.from(
+    new Set(
+      receipts.flatMap((receipt) =>
+        Array.isArray(receipt.taxes)
+          ? receipt.taxes
+              .map((tax) => {
+                if (!tax || typeof tax !== "object" || Array.isArray(tax)) {
+                  return "";
+                }
+
+                return String(tax.name ?? tax.type ?? "").trim();
+              })
+              .filter(Boolean)
+          : [],
+      ),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
+}
+
+function getNetAmount(receipt: Receipt) {
+  const subtotal = Number(receipt.subtotal ?? 0);
+  const tips = Number(receipt.tips ?? 0);
+  const net = subtotal + tips;
+
+  return Number.isFinite(net) ? String(net) : receipt.subtotal ?? "";
+}
+
 function csvEscape(value: unknown) {
   const text = value === null || value === undefined ? "" : String(value);
   return `"${text.replace(/"/g, '""')}"`;
@@ -181,33 +209,28 @@ export function receiptsToCsv(receipts: Receipt[]) {
         .filter((category): category is string => Boolean(category)),
     ),
   ).sort((a, b) => a.localeCompare(b));
+  const taxNames = getTaxNames(receipts);
 
   const rows = [
     [
-      "Record #",
+      "Receipt",
       "Date",
-      "Vendor",
+      "Description",
+      "Total",
+      ...taxNames,
+      "Net",
       ...categories,
-      "Subtotal",
-      "GST",
-      "PST",
-      "Tips",
-      "Grand Total",
-      "Payment Method",
     ],
     ...receipts.map((receipt) => [
       receipt.record_r_number,
       reportDate(receipt.receipt_date),
       receipt.vendor,
-      ...categories.map((category) =>
-        receipt.category === category ? receipt.grand_total ?? "" : "",
-      ),
-      receipt.subtotal ?? "",
-      getTaxAmount(receipt.taxes, "GST"),
-      getTaxAmount(receipt.taxes, "PST"),
-      receipt.tips ?? "",
       receipt.grand_total ?? "",
-      receipt.payment_method ?? "",
+      ...taxNames.map((taxName) => getTaxAmount(receipt.taxes, taxName)),
+      getNetAmount(receipt),
+      ...categories.map((category) =>
+        receipt.category === category ? getNetAmount(receipt) : "",
+      ),
     ]),
   ];
 
