@@ -110,34 +110,74 @@ async function getDriveImageBuffer(userId: number, fileUrl: string | null) {
   const fileId = getDriveFileId(fileUrl);
   if (!fileId) return null;
 
+  const fromResponse = async (type: string, data: ArrayBuffer) => {
+    const lowerType = type.toLowerCase();
+    const extension = lowerType.includes("png") ? "png" : "jpeg";
+
+    if (
+      !lowerType.includes("png") &&
+      !lowerType.includes("jpeg") &&
+      !lowerType.includes("jpg")
+    ) {
+      return null;
+    }
+
+    return {
+      buffer: Buffer.from(data),
+      extension: extension as "jpeg" | "png",
+    };
+  };
+
   const googleUser = await getGoogleUser(userId);
-  if (!googleUser) return null;
+  if (googleUser) {
+    try {
+      const auth = getGoogleOAuthClient();
+      auth.setCredentials({
+        access_token: googleUser.google_access_token ?? undefined,
+        refresh_token: googleUser.google_refresh_token ?? undefined,
+        expiry_date: googleUser.google_token_expiry
+          ? googleUser.google_token_expiry.getTime()
+          : undefined,
+      });
 
-  const auth = getGoogleOAuthClient();
-  auth.setCredentials({
-    access_token: googleUser.google_access_token ?? undefined,
-    refresh_token: googleUser.google_refresh_token ?? undefined,
-    expiry_date: googleUser.google_token_expiry
-      ? googleUser.google_token_expiry.getTime()
-      : undefined,
-  });
+      const drive = google.drive({ version: "v3", auth });
+      const file = await drive.files.get(
+        { fileId, alt: "media" },
+        { responseType: "arraybuffer" },
+      );
+      const mediaImage = await fromResponse(
+        String(file.headers["content-type"] ?? ""),
+        file.data as ArrayBuffer,
+      );
 
-  const drive = google.drive({ version: "v3", auth });
-  const file = await drive.files.get(
-    { fileId, alt: "media" },
-    { responseType: "arraybuffer" },
-  );
-  const type = String(file.headers["content-type"] ?? "");
-  const extension = type.includes("png") ? "png" : "jpeg";
-
-  if (!type.includes("png") && !type.includes("jpeg") && !type.includes("jpg")) {
-    return null;
+      if (mediaImage) {
+        return mediaImage;
+      }
+    } catch (error) {
+      console.error("Could not fetch Drive image through API:", error);
+    }
   }
 
-  return {
-    buffer: Buffer.from(file.data as ArrayBuffer),
-    extension: extension as "jpeg" | "png",
-  };
+  const urls = [
+    `https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId)}&sz=w1600`,
+    `https://drive.google.com/uc?export=download&id=${encodeURIComponent(fileId)}`,
+  ];
+
+  for (const url of urls) {
+    const response = await fetch(url);
+    if (!response.ok) continue;
+
+    const publicImage = await fromResponse(
+      response.headers.get("content-type") ?? "",
+      await response.arrayBuffer(),
+    );
+
+    if (publicImage) {
+      return publicImage;
+    }
+  }
+
+  return null;
 }
 
 function addDetailRow(
@@ -205,24 +245,23 @@ function buildReceiptWorkbook({
   const title = worksheet.getCell("A1");
   title.value = `${ownerName} Receipt`;
   title.font = { bold: true, size: 18 };
-  title.alignment = { horizontal: "right", vertical: "middle" };
+  title.alignment = { horizontal: "left", vertical: "middle" };
   worksheet.getRow(1).height = 30;
 
-  addDetailRow(worksheet, 3, "Record Number", receipt.record_r_number);
-  addDetailRow(worksheet, 4, "Vendor", receipt.vendor);
-  addDetailRow(worksheet, 5, "Receipt Date", toDate(receipt.receipt_date), dateFormat);
-  addDetailRow(worksheet, 6, "Receipt Time", receipt.receipt_time);
-  addDetailRow(worksheet, 7, "Category", receipt.category);
-  addDetailRow(worksheet, 8, "Sub-Total", toNumber(receipt.subtotal), currencyFormat);
+  addDetailRow(worksheet, 3, "Vendor", receipt.vendor);
+  addDetailRow(worksheet, 4, "Receipt Date", toDate(receipt.receipt_date), dateFormat);
+  addDetailRow(worksheet, 5, "Receipt Time", receipt.receipt_time);
+  addDetailRow(worksheet, 6, "Category", receipt.category);
+  addDetailRow(worksheet, 7, "Sub-Total", toNumber(receipt.subtotal), currencyFormat);
 
   const taxes = getTaxes(receipt.taxes);
-  worksheet.getRow(9).getCell(1).value = "Tax Name";
-  worksheet.getRow(9).getCell(2).value = "Tax Amount";
-  worksheet.getRow(9).getCell(1).font = { bold: true };
-  worksheet.getRow(9).getCell(2).font = { bold: true };
-  styleRange(worksheet, 9, 9, 1, 2);
+  worksheet.getRow(8).getCell(1).value = "Tax Name";
+  worksheet.getRow(8).getCell(2).value = "Tax Amount";
+  worksheet.getRow(8).getCell(1).font = { bold: true };
+  worksheet.getRow(8).getCell(2).font = { bold: true };
+  styleRange(worksheet, 8, 8, 1, 2);
 
-  const taxStart = 10;
+  const taxStart = 9;
   const taxRows = Math.max(taxes.length, 2);
   for (let index = 0; index < taxRows; index += 1) {
     const rowNumber = taxStart + index;
@@ -263,15 +302,12 @@ function buildReceiptWorkbook({
   items.forEach((item, index) => {
     const rowNumber = itemHeaderRow + 1 + index;
     const row = worksheet.getRow(rowNumber);
-    row.values = [
-      undefined,
-      item.item_name,
-      item.adjusted_item_name ?? item.item_name,
-      item.item_category,
-      toNumber(item.item_qty),
-      toNumber(item.item_price),
-      toNumber(item.item_total_price),
-    ];
+    row.getCell(1).value = item.item_name;
+    row.getCell(2).value = item.adjusted_item_name ?? item.item_name;
+    row.getCell(3).value = item.item_category;
+    row.getCell(4).value = toNumber(item.item_qty);
+    row.getCell(5).value = toNumber(item.item_price);
+    row.getCell(6).value = toNumber(item.item_total_price);
     row.getCell(4).numFmt = "#,##0.##";
     row.getCell(5).numFmt = currencyFormat;
     row.getCell(6).numFmt = currencyFormat;
@@ -299,7 +335,7 @@ function buildReceiptWorkbook({
       worksheet.getRow(rowNumber).height = 18;
     }
   } else {
-    addDetailRow(worksheet, imageTitleRow + 2, "Receipt Image Link", receipt.attachment_link);
+    worksheet.getCell(imageTitleRow + 2, 1).value = "Receipt image could not be embedded.";
   }
 
   worksheet.eachRow((row) => {
@@ -311,6 +347,8 @@ function buildReceiptWorkbook({
       };
     });
   });
+
+  title.alignment = { horizontal: "left", vertical: "middle" };
 
   worksheet.pageSetup.printArea = `A1:F${imageTitleRow + 42}`;
 
