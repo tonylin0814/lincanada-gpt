@@ -214,6 +214,9 @@ export function DashboardNavigation({
           </span>
         ) : null}
       </Link>
+      <Link className="text-foreground/75 hover:text-foreground" href="/dashboard/settings/categories">
+        Settings
+      </Link>
       {isAdmin ? (
         <Link className="text-foreground/75 hover:text-foreground" href="/admin">
           Admin Panel

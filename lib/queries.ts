@@ -321,6 +321,47 @@ export async function getItemCategories(client: Client) {
   return result.rows.map((row) => row.category);
 }
 
+export async function renameItemCategory(
+  client: Client,
+  oldName: string,
+  newName: string,
+) {
+  const from = oldName.trim();
+  const to = newName.trim();
+
+  if (!from || !to) {
+    throw new Error("Both category names are required.");
+  }
+
+  await client.query("BEGIN");
+  try {
+    await client.query(
+      `INSERT INTO item_categories (name)
+       SELECT $1
+       WHERE NOT EXISTS (
+         SELECT 1 FROM item_categories WHERE LOWER(name) = LOWER($1)
+       )`,
+      [to],
+    );
+    await client.query(
+      "UPDATE receipt_items SET item_category = $2 WHERE item_category = $1",
+      [from, to],
+    );
+    await client.query(
+      "UPDATE invoice_items SET item_category = $2 WHERE item_category = $1",
+      [from, to],
+    );
+    await client.query(
+      "DELETE FROM item_categories WHERE name = $1",
+      [from],
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  }
+}
+
 export async function getInvoiceCategories(client: Client) {
   const result = await client.query<{ category: string }>(
     `SELECT DISTINCT category
