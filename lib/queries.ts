@@ -308,6 +308,28 @@ export async function getReceiptCategories(client: Client) {
   return result.rows.map((row) => row.category);
 }
 
+export async function getReceiptItemCategories(client: Client) {
+  const result = await client.query<{ category: string }>(
+    `SELECT name AS category FROM item_categories
+     UNION
+     SELECT DISTINCT item_category FROM receipt_items WHERE item_category IS NOT NULL
+     ORDER BY category ASC`,
+  );
+
+  return result.rows.map((row) => row.category);
+}
+
+export async function getInvoiceItemCategories(client: Client) {
+  const result = await client.query<{ category: string }>(
+    `SELECT name AS category FROM item_categories
+     UNION
+     SELECT DISTINCT item_category FROM invoice_items WHERE item_category IS NOT NULL
+     ORDER BY category ASC`,
+  );
+
+  return result.rows.map((row) => row.category);
+}
+
 export async function getItemCategories(client: Client) {
   const result = await client.query<{ category: string }>(
     `SELECT name AS category FROM item_categories
