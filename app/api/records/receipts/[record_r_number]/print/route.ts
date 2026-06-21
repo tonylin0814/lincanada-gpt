@@ -226,24 +226,31 @@ function drawCell(
   );
 }
 
-function drawDetailRow(
+function drawDetailRowAt(
   page: PDFPage,
   y: number,
   label: string,
   value: string,
   fonts: { regular: PDFFont; bold: PDFFont },
+  x = pageMargin,
+  labelWidth = 150,
+  valueWidth = 260,
 ) {
-  drawCell(page, label, pageMargin, y, 150, 21, fonts, true);
-  drawCell(page, value, pageMargin + 150, y, 260, 21, fonts);
+  drawCell(page, label, x, y, labelWidth, 21, fonts, true);
+  drawCell(page, value, x + labelWidth, y, valueWidth, 21, fonts);
 }
 
 function drawDetails(
   page: PDFPage,
   receipt: Receipt,
   fonts: { regular: PDFFont; bold: PDFFont },
+  x = pageMargin,
+  startY = pageHeight - 126,
+  labelWidth = 150,
+  valueWidth = 260,
 ) {
   const taxes = getTaxes(receipt.taxes);
-  let y = pageHeight - 126;
+  let y = startY;
   const rows: Array<[string, string]> = [
     ["Vendor", receipt.vendor],
     ["Receipt Date", formatDate(receipt.receipt_date)],
@@ -253,25 +260,25 @@ function drawDetails(
   ];
 
   rows.forEach(([label, value]) => {
-    drawDetailRow(page, y, label, value, fonts);
+    drawDetailRowAt(page, y, label, value, fonts, x, labelWidth, valueWidth);
     y -= 21;
   });
 
-  drawCell(page, "Tax Name", pageMargin, y, 150, 21, fonts, true);
-  drawCell(page, "Tax Amount", pageMargin + 150, y, 260, 21, fonts, true);
+  drawCell(page, "Tax Name", x, y, labelWidth, 21, fonts, true);
+  drawCell(page, "Tax Amount", x + labelWidth, y, valueWidth, 21, fonts, true);
   y -= 21;
 
   const taxRows = Math.max(taxes.length, 2);
   for (let index = 0; index < taxRows; index += 1) {
-    drawCell(page, taxes[index]?.name ?? "", pageMargin, y, 150, 21, fonts);
+    drawCell(page, taxes[index]?.name ?? "", x, y, labelWidth, 21, fonts);
     drawCell(
       page,
       taxes[index]?.amount === null || taxes[index] === undefined
         ? ""
         : formatMoney(taxes[index].amount, receipt.currency),
-      pageMargin + 150,
+      x + labelWidth,
       y,
-      260,
+      valueWidth,
       21,
       fonts,
     );
@@ -291,11 +298,70 @@ function drawDetails(
   ];
 
   bottomRows.forEach(([label, value]) => {
-    drawDetailRow(page, y, label, value, fonts);
+    drawDetailRowAt(page, y, label, value, fonts, x, labelWidth, valueWidth);
     y -= 21;
   });
 
   return y - 35;
+}
+
+function drawHeaderInfo(
+  page: PDFPage,
+  receipt: Receipt,
+  fonts: { regular: PDFFont; bold: PDFFont },
+) {
+  const y = pageHeight - 92;
+  drawCell(page, "Record Number", pageMargin, y, 130, 22, fonts, true);
+  drawCell(page, receipt.record_r_number, pageMargin + 130, y, 180, 22, fonts);
+  drawCell(page, "Vendor", pageMargin + 340, y, 90, 22, fonts, true);
+  drawCell(page, receipt.vendor, pageMargin + 430, y, 290, 22, fonts);
+}
+
+function drawReceiptPreview(
+  page: PDFPage,
+  image: PDFImage | null,
+  fonts: { regular: PDFFont; bold: PDFFont },
+) {
+  const x = pageMargin;
+  const y = 76;
+  const width = 320;
+  const height = 380;
+
+  page.drawText("Receipt Preview", {
+    x,
+    y: y + height + 12,
+    font: fonts.bold,
+    size: 12,
+  });
+  page.drawRectangle({
+    x,
+    y,
+    width,
+    height,
+    borderColor: lineColor,
+    borderWidth: 0.7,
+  });
+
+  if (!image) {
+    page.drawText("Receipt image could not be embedded.", {
+      x: x + 16,
+      y: y + height / 2,
+      font: fonts.regular,
+      size: 10,
+    });
+    return;
+  }
+
+  const scale = Math.min((width - 16) / image.width, (height - 16) / image.height);
+  const imageWidth = image.width * scale;
+  const imageHeight = image.height * scale;
+
+  page.drawImage(image, {
+    x: x + (width - imageWidth) / 2,
+    y: y + (height - imageHeight) / 2,
+    width: imageWidth,
+    height: imageHeight,
+  });
 }
 
 function drawItemsTable(
@@ -430,6 +496,7 @@ async function buildReceiptPdf({
   const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const fonts = { regular, bold };
   const page = pdfDoc.addPage([pageWidth, pageHeight]);
+  const embeddedImage = await embedReceiptImage(pdfDoc, image);
   const ownerName =
     entity?.type === "company" ? entity.name : userName || entity?.name || "Personal";
 
@@ -440,9 +507,13 @@ async function buildReceiptPdf({
     size: 18,
   });
 
-  const itemStartY = drawDetails(page, receipt, fonts);
-  drawItemsTable(pdfDoc, page, itemStartY, items, receipt.currency, fonts);
-  drawImagePage(pdfDoc, await embedReceiptImage(pdfDoc, image), fonts);
+  drawHeaderInfo(page, receipt, fonts);
+  drawReceiptPreview(page, embeddedImage, fonts);
+  drawDetails(page, receipt, fonts, 390, pageHeight - 126, 140, 225);
+
+  const itemPage = pdfDoc.addPage([pageWidth, pageHeight]);
+  drawItemsTable(pdfDoc, itemPage, pageHeight - 56, items, receipt.currency, fonts);
+  drawImagePage(pdfDoc, embeddedImage, fonts);
 
   return Buffer.from(await pdfDoc.save());
 }

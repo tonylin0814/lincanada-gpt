@@ -363,7 +363,7 @@ export function ReceiptRecordClient({
             onClick={downloadRecord}
             type="button"
           >
-            {isDownloading ? "Downloading..." : "Download Record"}
+            {isDownloading ? "Downloading..." : "Download PDF"}
           </button>
           {!editMode ? (
             <button
