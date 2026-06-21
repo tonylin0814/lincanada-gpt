@@ -32,7 +32,7 @@ export default async function InvoiceReviewPage({ params }: PageProps) {
             Back to review queue
           </Link>
           <h1 className="mt-6 text-2xl font-semibold tracking-normal">
-            Review Invoice {invoice.record_i_number}
+            Review Revenue {invoice.record_i_number}
           </h1>
           <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(320px,1fr)_minmax(0,1.4fr)]">
             <section className="border border-foreground/10 p-4">

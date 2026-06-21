@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth";
 import { getUserDb } from "@/lib/db";
-import { getReceiptById } from "@/lib/queries";
-import type { Receipt } from "@/types/licanada_gpt";
+import { getReceiptById, getReceiptItems } from "@/lib/queries";
+import type { Receipt, ReceiptItem } from "@/types/licanada_gpt";
 
 type ReceiptDetailPageProps = {
   params: {
@@ -16,12 +16,12 @@ type ReceiptField = {
   value: string;
 };
 
-function formatRecordDate(value: Date) {
-  return value.toISOString().slice(0, 19).replace("T", " ");
+function formatRecordDate(value: Date | string) {
+  return new Date(value).toISOString().slice(0, 19).replace("T", " ");
 }
 
-function formatReceiptDate(date: Date, time: string | null) {
-  const isoDate = date.toISOString().slice(0, 10);
+function formatReceiptDate(date: Date | string, time: string | null) {
+  const isoDate = new Date(date).toISOString().slice(0, 10);
   const [year, month, day] = isoDate.split("-").map(Number);
   const utcDate = new Date(Date.UTC(year, month - 1, day));
   const formattedDate = new Intl.DateTimeFormat("en-US", {
@@ -108,6 +108,47 @@ function buildReceiptFields(receipt: Receipt): ReceiptField[][] {
   ];
 }
 
+function ItemsTable({ items }: { items: ReceiptItem[] }) {
+  return (
+    <div className="mt-10 overflow-x-auto border border-foreground/10">
+      <table className="w-full min-w-[760px] text-left text-sm">
+        <thead className="bg-foreground/5">
+          <tr>
+            <th className="px-3 py-2">Item</th>
+            <th className="px-3 py-2">Adjusted Item</th>
+            <th className="px-3 py-2">Category</th>
+            <th className="px-3 py-2">Qty</th>
+            <th className="px-3 py-2">Price</th>
+            <th className="px-3 py-2">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.length > 0 ? (
+            items.map((item) => (
+              <tr className="border-t border-foreground/10" key={item.id}>
+                <td className="px-3 py-2">{item.item_name}</td>
+                <td className="px-3 py-2">
+                  {item.adjusted_item_name ?? item.item_name}
+                </td>
+                <td className="px-3 py-2">{item.item_category}</td>
+                <td className="px-3 py-2">{item.item_qty ?? ""}</td>
+                <td className="px-3 py-2">{item.item_price ?? ""}</td>
+                <td className="px-3 py-2">{item.item_total_price ?? ""}</td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td className="px-3 py-4 text-foreground/60" colSpan={6}>
+                No item rows.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default async function ReceiptDetailPage({
   params,
 }: ReceiptDetailPageProps) {
@@ -120,10 +161,11 @@ export default async function ReceiptDetailPage({
   const client = await getUserDb(session.user.supabase_connection_string);
 
   try {
-    const receipt = await getReceiptById(
-      client,
-      decodeURIComponent(params.record),
-    );
+    const record = decodeURIComponent(params.record);
+    const [receipt, items] = await Promise.all([
+      getReceiptById(client, record),
+      getReceiptItems(client, record),
+    ]);
 
     if (!receipt) {
       notFound();
@@ -180,6 +222,7 @@ export default async function ReceiptDetailPage({
                   ))}
                 </dl>
               ))}
+              <ItemsTable items={items} />
             </div>
           </div>
         </div>

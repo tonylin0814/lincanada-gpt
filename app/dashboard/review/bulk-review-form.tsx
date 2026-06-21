@@ -76,7 +76,7 @@ export function BulkReviewForm({
                   />
                 </td>
                 <td className="px-4 py-3">
-                  {record.type === "receipt" ? "Receipt" : "Invoice"}
+                  {record.type === "receipt" ? "Expense" : "Revenue"}
                 </td>
                 <td className="px-4 py-3">{record.record_number}</td>
                 <td className="px-4 py-3">

@@ -359,7 +359,7 @@ export default async function RecordsPage({ searchParams }: RecordsPageProps) {
                 Records
               </h1>
               <p className="mt-2 text-sm text-foreground/65">
-                Browse receipts and invoices from your Supabase database.
+                Browse expense and revenue records from your Supabase database.
               </p>
             </div>
           </div>
@@ -373,7 +373,7 @@ export default async function RecordsPage({ searchParams }: RecordsPageProps) {
               }`}
               href={buildHref(searchParams, { tab: "receipts", page: 1 })}
             >
-              Receipts
+              Expense
             </Link>
             <Link
               className={`px-4 py-3 text-sm ${
@@ -383,7 +383,7 @@ export default async function RecordsPage({ searchParams }: RecordsPageProps) {
               }`}
               href={buildHref(searchParams, { tab: "invoices", page: 1 })}
             >
-              Invoices
+              Revenue
             </Link>
           </div>
 
