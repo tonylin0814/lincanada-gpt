@@ -268,6 +268,17 @@ export function UploadClient({
     );
   }
 
+  function removeUpload(id: string) {
+    setUploads((current) => {
+      const removed = current.find((upload) => upload.id === id);
+      if (removed?.preview_url) {
+        URL.revokeObjectURL(removed.preview_url);
+      }
+
+      return current.filter((upload) => upload.id !== id);
+    });
+  }
+
   async function rematchUpload(upload: UploadFile, nextOcr: ReceiptOcrResult) {
     if (!upload.exif) return;
 
@@ -649,6 +660,7 @@ export function UploadClient({
                 onRecordChange={(value) =>
                   updateUpload(upload.id, { selected_record_r_number: value })
                 }
+                onRemove={() => removeUpload(upload.id)}
                 onTaxBlur={updateOcrTax}
                 categories={categories}
                 upload={upload}
@@ -690,6 +702,7 @@ function UploadEditCard({
   onFieldBlur,
   onTaxBlur,
   onRecordChange,
+  onRemove,
 }: {
   upload: UploadFile;
   categories: string[];
@@ -705,6 +718,7 @@ function UploadEditCard({
     value: string,
   ) => void;
   onRecordChange: (value: string) => void;
+  onRemove: () => void;
 }) {
   const ocr = upload.ocr;
   const taxRows = getTaxRows(ocr?.taxes);
@@ -715,7 +729,15 @@ function UploadEditCard({
   const display = matchDisplay(upload);
 
   return (
-    <article className="overflow-hidden rounded-md border border-foreground/10">
+    <article className="relative overflow-hidden rounded-md border border-foreground/10">
+      <button
+        aria-label={`Remove ${upload.file.name}`}
+        className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-foreground/15 bg-background text-lg leading-none shadow-sm transition-colors hover:border-red-600 hover:bg-red-50 hover:text-red-700"
+        onClick={onRemove}
+        type="button"
+      >
+        ×
+      </button>
       <div className="grid gap-4 p-4 md:grid-cols-[180px_1fr]">
         <div className="flex aspect-[4/3] items-center justify-center bg-foreground/5">
           {upload.preview_url ? (
