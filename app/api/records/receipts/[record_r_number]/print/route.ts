@@ -1,6 +1,13 @@
-import PDFDocument from "pdfkit";
 import { google } from "googleapis";
 import { NextResponse } from "next/server";
+import {
+  PDFDocument,
+  PDFImage,
+  PDFPage,
+  PDFFont,
+  StandardFonts,
+  rgb,
+} from "pdf-lib";
 import { getCurrentSession } from "@/lib/auth";
 import { getUserDb, getWebAppDb } from "@/lib/db";
 import { getDriveFileId, getGoogleOAuthClient } from "@/lib/drive";
@@ -23,8 +30,10 @@ type TaxRow = {
   amount: number | null;
 };
 
+const pageWidth = 792;
+const pageHeight = 612;
 const pageMargin = 36;
-const tableStroke = "#111111";
+const lineColor = rgb(0, 0, 0);
 
 function toNumber(value: string | number | null | undefined) {
   if (value === null || value === undefined || value === "") return null;
@@ -160,48 +169,81 @@ async function getDriveImageBuffer(userId: number, fileUrl: string | null) {
   return null;
 }
 
-function collectPdfBuffer(doc: PDFKit.PDFDocument) {
-  return new Promise<Buffer>((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    doc.on("data", (chunk: Buffer) => chunks.push(chunk));
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
-    doc.on("error", reject);
+function fitText(text: string, font: PDFFont, size: number, width: number) {
+  let value = text;
+  while (value.length > 3 && font.widthOfTextAtSize(value, size) > width) {
+    value = `${value.slice(0, -4)}...`;
+  }
+  return value;
+}
+
+function drawRightText(
+  page: PDFPage,
+  text: string,
+  x: number,
+  y: number,
+  width: number,
+  font: PDFFont,
+  size: number,
+) {
+  const fitted = fitText(text, font, size, width);
+  const textWidth = font.widthOfTextAtSize(fitted, size);
+  page.drawText(fitted, {
+    x: x + width - textWidth,
+    y,
+    font,
+    size,
+    color: rgb(0, 0, 0),
   });
 }
 
 function drawCell(
-  doc: PDFKit.PDFDocument,
+  page: PDFPage,
   text: string,
   x: number,
   y: number,
   width: number,
   height: number,
+  fonts: { regular: PDFFont; bold: PDFFont },
   bold = false,
 ) {
-  doc.rect(x, y, width, height).stroke(tableStroke);
-  doc
-    .font(bold ? "Helvetica-Bold" : "Helvetica")
-    .fontSize(9)
-    .text(text, x + 5, y + 5, {
-      align: "right",
-      height: height - 8,
-      width: width - 10,
-    });
+  page.drawRectangle({
+    x,
+    y,
+    width,
+    height,
+    borderColor: lineColor,
+    borderWidth: 0.7,
+  });
+  drawRightText(
+    page,
+    text,
+    x + 5,
+    y + height - 14,
+    width - 10,
+    bold ? fonts.bold : fonts.regular,
+    9,
+  );
 }
 
 function drawDetailRow(
-  doc: PDFKit.PDFDocument,
+  page: PDFPage,
   y: number,
   label: string,
   value: string,
+  fonts: { regular: PDFFont; bold: PDFFont },
 ) {
-  drawCell(doc, label, pageMargin, y, 150, 21, true);
-  drawCell(doc, value, pageMargin + 150, y, 260, 21);
+  drawCell(page, label, pageMargin, y, 150, 21, fonts, true);
+  drawCell(page, value, pageMargin + 150, y, 260, 21, fonts);
 }
 
-function drawDetails(doc: PDFKit.PDFDocument, receipt: Receipt) {
+function drawDetails(
+  page: PDFPage,
+  receipt: Receipt,
+  fonts: { regular: PDFFont; bold: PDFFont },
+) {
   const taxes = getTaxes(receipt.taxes);
-  let y = 82;
+  let y = pageHeight - 126;
   const rows: Array<[string, string]> = [
     ["Vendor", receipt.vendor],
     ["Receipt Date", formatDate(receipt.receipt_date)],
@@ -211,19 +253,19 @@ function drawDetails(doc: PDFKit.PDFDocument, receipt: Receipt) {
   ];
 
   rows.forEach(([label, value]) => {
-    drawDetailRow(doc, y, label, value);
-    y += 21;
+    drawDetailRow(page, y, label, value, fonts);
+    y -= 21;
   });
 
-  drawCell(doc, "Tax Name", pageMargin, y, 150, 21, true);
-  drawCell(doc, "Tax Amount", pageMargin + 150, y, 260, 21, true);
-  y += 21;
+  drawCell(page, "Tax Name", pageMargin, y, 150, 21, fonts, true);
+  drawCell(page, "Tax Amount", pageMargin + 150, y, 260, 21, fonts, true);
+  y -= 21;
 
   const taxRows = Math.max(taxes.length, 2);
   for (let index = 0; index < taxRows; index += 1) {
-    drawCell(doc, taxes[index]?.name ?? "", pageMargin, y, 150, 21);
+    drawCell(page, taxes[index]?.name ?? "", pageMargin, y, 150, 21, fonts);
     drawCell(
-      doc,
+      page,
       taxes[index]?.amount === null || taxes[index] === undefined
         ? ""
         : formatMoney(taxes[index].amount, receipt.currency),
@@ -231,8 +273,9 @@ function drawDetails(doc: PDFKit.PDFDocument, receipt: Receipt) {
       y,
       260,
       21,
+      fonts,
     );
-    y += 21;
+    y -= 21;
   }
 
   const bottomRows: Array<[string, string]> = [
@@ -248,19 +291,22 @@ function drawDetails(doc: PDFKit.PDFDocument, receipt: Receipt) {
   ];
 
   bottomRows.forEach(([label, value]) => {
-    drawDetailRow(doc, y, label, value);
-    y += 21;
+    drawDetailRow(page, y, label, value, fonts);
+    y -= 21;
   });
 
-  return y + 32;
+  return y - 35;
 }
 
 function drawItemsTable(
-  doc: PDFKit.PDFDocument,
+  pdfDoc: PDFDocument,
+  firstPage: PDFPage,
   startY: number,
   items: ReceiptItem[],
   currency: string,
+  fonts: { regular: PDFFont; bold: PDFFont },
 ) {
+  let page = firstPage;
   let y = startY;
   const columns = [
     { label: "Item", width: 150 },
@@ -271,26 +317,33 @@ function drawItemsTable(
     { label: "Total", width: 75 },
   ];
 
-  doc.font("Helvetica-Bold").fontSize(15).text("Items", pageMargin, y, {
-    align: "left",
-    width: 720,
-  });
-  y += 28;
+  function drawHeader() {
+    page.drawText("Items", {
+      x: pageMargin,
+      y,
+      font: fonts.bold,
+      size: 15,
+    });
+    y -= 28;
 
-  let x = pageMargin;
-  columns.forEach((column) => {
-    drawCell(doc, column.label, x, y, column.width, 24, true);
-    x += column.width;
-  });
-  y += 24;
+    let x = pageMargin;
+    columns.forEach((column) => {
+      drawCell(page, column.label, x, y, column.width, 24, fonts, true);
+      x += column.width;
+    });
+    y -= 24;
+  }
+
+  drawHeader();
 
   items.forEach((item) => {
-    if (y > doc.page.height - pageMargin - 28) {
-      doc.addPage();
-      y = pageMargin;
+    if (y < pageMargin + 32) {
+      page = pdfDoc.addPage([pageWidth, pageHeight]);
+      y = pageHeight - pageMargin;
+      drawHeader();
     }
 
-    x = pageMargin;
+    let x = pageMargin;
     const values = [
       item.item_name,
       item.adjusted_item_name ?? item.item_name,
@@ -301,10 +354,61 @@ function drawItemsTable(
     ];
 
     values.forEach((value, index) => {
-      drawCell(doc, value, x, y, columns[index].width, 28);
+      drawCell(page, value, x, y, columns[index].width, 28, fonts);
       x += columns[index].width;
     });
-    y += 28;
+    y -= 28;
+  });
+}
+
+async function embedReceiptImage(pdfDoc: PDFDocument, image: Buffer | null) {
+  if (!image) return null;
+
+  try {
+    return await pdfDoc.embedPng(new Uint8Array(image));
+  } catch {
+    try {
+      return await pdfDoc.embedJpg(new Uint8Array(image));
+    } catch {
+      return null;
+    }
+  }
+}
+
+function drawImagePage(
+  pdfDoc: PDFDocument,
+  image: PDFImage | null,
+  fonts: { regular: PDFFont; bold: PDFFont },
+) {
+  const page = pdfDoc.addPage([pageWidth, pageHeight]);
+  page.drawText("Receipt Image", {
+    x: pageMargin,
+    y: pageHeight - 56,
+    font: fonts.bold,
+    size: 16,
+  });
+
+  if (!image) {
+    page.drawText("Receipt image could not be embedded.", {
+      x: pageMargin,
+      y: pageHeight - 86,
+      font: fonts.regular,
+      size: 11,
+    });
+    return;
+  }
+
+  const maxWidth = pageWidth - pageMargin * 2;
+  const maxHeight = pageHeight - 112;
+  const scale = Math.min(maxWidth / image.width, maxHeight / image.height);
+  const width = image.width * scale;
+  const height = image.height * scale;
+
+  page.drawImage(image, {
+    x: pageMargin + (maxWidth - width) / 2,
+    y: pageMargin,
+    width,
+    height,
   });
 }
 
@@ -321,41 +425,26 @@ async function buildReceiptPdf({
   image: Buffer | null;
   items: ReceiptItem[];
 }) {
-  const doc = new PDFDocument({
-    layout: "landscape",
-    margin: pageMargin,
-    size: "LETTER",
-  });
-  const pdfBuffer = collectPdfBuffer(doc);
+  const pdfDoc = await PDFDocument.create();
+  const regular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const fonts = { regular, bold };
+  const page = pdfDoc.addPage([pageWidth, pageHeight]);
   const ownerName =
     entity?.type === "company" ? entity.name : userName || entity?.name || "Personal";
 
-  doc.font("Helvetica-Bold").fontSize(18).text(`${ownerName} Receipt`, {
-    align: "left",
+  page.drawText(`${ownerName} Receipt`, {
+    x: pageMargin,
+    y: pageHeight - 56,
+    font: fonts.bold,
+    size: 18,
   });
 
-  const itemStartY = drawDetails(doc, receipt);
-  drawItemsTable(doc, itemStartY, items, receipt.currency);
+  const itemStartY = drawDetails(page, receipt, fonts);
+  drawItemsTable(pdfDoc, page, itemStartY, items, receipt.currency, fonts);
+  drawImagePage(pdfDoc, await embedReceiptImage(pdfDoc, image), fonts);
 
-  doc.addPage();
-  doc.font("Helvetica-Bold").fontSize(16).text("Receipt Image", {
-    align: "left",
-  });
-
-  if (image) {
-    doc.image(image, pageMargin, 76, {
-      align: "center",
-      fit: [doc.page.width - pageMargin * 2, doc.page.height - 112],
-    });
-  } else {
-    doc
-      .font("Helvetica")
-      .fontSize(11)
-      .text("Receipt image could not be embedded.", pageMargin, 80);
-  }
-
-  doc.end();
-  return pdfBuffer;
+  return Buffer.from(await pdfDoc.save());
 }
 
 export async function GET(_request: Request, { params }: RouteContext) {
@@ -404,6 +493,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
 
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
+        "Cache-Control": "no-store",
         "Content-Disposition": `attachment; filename="${record}.pdf"`,
         "Content-Type": "application/pdf",
       },
