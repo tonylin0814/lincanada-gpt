@@ -178,107 +178,120 @@ function getArchiveFilename(receipt: Receipt) {
 }
 
 export async function POST(request: Request) {
-  const session = await getCurrentSession();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const formData = await request.formData();
-  const file = formData.get("image_file");
-  const matchAction = formData.get("match_action");
-  const recordNumber = String(formData.get("record_r_number") ?? "");
-  const entityId = Number(formData.get("entity_id") ?? 1);
-  const exif = JSON.parse(String(formData.get("exif") ?? "{}")) as ExtractedExif;
-  const ocr = JSON.parse(String(formData.get("ocr_data") ?? "{}")) as ReceiptOcrResult;
-
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: "image_file is required." }, { status: 400 });
-  }
-
-  if (matchAction !== "link" && matchAction !== "create") {
-    return NextResponse.json({ error: "Invalid match_action." }, { status: 400 });
-  }
-
-  const googleUser = await getGoogleUser(session.user.id);
-  if (!googleUser?.google_drive_folder_id) {
-    return NextResponse.json(
-      { error: "Google Drive root folder is not configured." },
-      { status: 400 },
-    );
-  }
-  if (!googleUser.google_access_token && !googleUser.google_refresh_token) {
-    return NextResponse.json(
-      { error: "Google Drive is not connected.", connect_url: "/api/auth/google" },
-      { status: 401 },
-    );
-  }
-
-  const auth = getGoogleOAuthClient();
-  auth.setCredentials({
-    access_token: googleUser.google_access_token ?? undefined,
-    refresh_token: googleUser.google_refresh_token ?? undefined,
-    expiry_date: googleUser.google_token_expiry
-      ? googleUser.google_token_expiry.getTime()
-      : undefined,
-  });
-
-  const client = await getUserDb(session.user.supabase_connection_string);
   try {
-    const receipt =
-      matchAction === "link"
-        ? await getReceipt(client, recordNumber)
-        : await createReceipt(client, entityId || 1, ocr, exif);
-
-    if (!receipt) {
-      return NextResponse.json({ error: "Receipt not found." }, { status: 404 });
+    const session = await getCurrentSession();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const entity = await getEntity(client, receipt.entity_id);
-    if (!entity) {
-      return NextResponse.json({ error: "Entity not found." }, { status: 404 });
+    const formData = await request.formData();
+    const file = formData.get("image_file");
+    const matchAction = formData.get("match_action");
+    const recordNumber = String(formData.get("record_r_number") ?? "");
+    const entityId = Number(formData.get("entity_id") ?? 1);
+    const exif = JSON.parse(String(formData.get("exif") ?? "{}")) as ExtractedExif;
+    const ocr = JSON.parse(String(formData.get("ocr_data") ?? "{}")) as ReceiptOcrResult;
+
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: "image_file is required." }, { status: 400 });
     }
 
-    const receiptDate = String(receipt.receipt_date).slice(0, 10);
-    const folderId = await ensureFolderPath(
-      auth,
-      googleUser.google_drive_folder_id,
-      entity.name,
-      receiptDate.slice(0, 4),
-      getMonthName(receiptDate),
-    );
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const driveUrl = await uploadFile(
-      auth,
-      folderId,
-      getArchiveFilename(receipt),
-      buffer,
-      getMimeType(file),
-    );
+    if (matchAction !== "link" && matchAction !== "create") {
+      return NextResponse.json({ error: "Invalid match_action." }, { status: 400 });
+    }
 
-    await client.query(
-      `UPDATE receipts
-       SET attachment_link = $2,
-           source_filename = COALESCE(source_filename, $3),
-           photo_taken_at = COALESCE(photo_taken_at, $4),
-           photo_gps_lat = COALESCE(photo_gps_lat, $5),
-           photo_gps_lng = COALESCE(photo_gps_lng, $6)
-       WHERE record_r_number = $1`,
-      [
-        receipt.record_r_number,
-        driveUrl,
-        exif.filename,
-        exif.photo_taken_at,
-        exif.gps_lat,
-        exif.gps_lng,
-      ],
-    );
+    const googleUser = await getGoogleUser(session.user.id);
+    if (!googleUser?.google_drive_folder_id) {
+      return NextResponse.json(
+        { error: "Google Drive root folder is not configured." },
+        { status: 400 },
+      );
+    }
+    if (!googleUser.google_access_token && !googleUser.google_refresh_token) {
+      return NextResponse.json(
+        { error: "Google Drive is not connected.", connect_url: "/api/auth/google" },
+        { status: 401 },
+      );
+    }
 
-    return NextResponse.json({
-      record_r_number: receipt.record_r_number,
-      action: matchAction,
-      attachment_link: driveUrl,
+    const auth = getGoogleOAuthClient();
+    auth.setCredentials({
+      access_token: googleUser.google_access_token ?? undefined,
+      refresh_token: googleUser.google_refresh_token ?? undefined,
+      expiry_date: googleUser.google_token_expiry
+        ? googleUser.google_token_expiry.getTime()
+        : undefined,
     });
-  } finally {
-    await client.end();
+
+    const client = await getUserDb(session.user.supabase_connection_string);
+    try {
+      const receipt =
+        matchAction === "link"
+          ? await getReceipt(client, recordNumber)
+          : await createReceipt(client, entityId || 1, ocr, exif);
+
+      if (!receipt) {
+        return NextResponse.json({ error: "Receipt not found." }, { status: 404 });
+      }
+
+      const entity = await getEntity(client, receipt.entity_id);
+      if (!entity) {
+        return NextResponse.json({ error: "Entity not found." }, { status: 404 });
+      }
+
+      const receiptDate = String(receipt.receipt_date).slice(0, 10);
+      const folderId = await ensureFolderPath(
+        auth,
+        googleUser.google_drive_folder_id,
+        entity.name,
+        receiptDate.slice(0, 4),
+        getMonthName(receiptDate),
+      );
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const driveUrl = await uploadFile(
+        auth,
+        folderId,
+        getArchiveFilename(receipt),
+        buffer,
+        getMimeType(file),
+      );
+
+      await client.query(
+        `UPDATE receipts
+         SET attachment_link = $2,
+             source_filename = COALESCE(source_filename, $3),
+             photo_taken_at = COALESCE(photo_taken_at, $4),
+             photo_gps_lat = COALESCE(photo_gps_lat, $5),
+             photo_gps_lng = COALESCE(photo_gps_lng, $6)
+         WHERE record_r_number = $1`,
+        [
+          receipt.record_r_number,
+          driveUrl,
+          exif.filename,
+          exif.photo_taken_at,
+          exif.gps_lat,
+          exif.gps_lng,
+        ],
+      );
+
+      return NextResponse.json({
+        record_r_number: receipt.record_r_number,
+        action: matchAction,
+        attachment_link: driveUrl,
+      });
+    } finally {
+      await client.end();
+    }
+  } catch (error) {
+    console.error("Archive failed:", error);
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Archive failed.",
+      },
+      { status: 500 },
+    );
   }
 }
