@@ -291,7 +291,7 @@ export async function getInvoicesPage(
 
 export async function getEntities(client: Client) {
   const result = await client.query<Entity>(
-    "SELECT * FROM entities ORDER BY name ASC",
+    "SELECT * FROM entities WHERE is_active = TRUE ORDER BY name ASC",
   );
 
   return result.rows;

@@ -163,6 +163,9 @@ export function DashboardNavigation({
     if (nextId) {
       setSelectedCompanyId(nextId);
       window.localStorage.setItem(selectedCompanyKey, String(nextId));
+    } else {
+      setSelectedCompanyId(null);
+      window.localStorage.removeItem(selectedCompanyKey);
     }
   }, [companyEntities, searchParams]);
 
