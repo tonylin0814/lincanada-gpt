@@ -224,6 +224,7 @@ export function UploadClient({
   const [isArchiving, setIsArchiving] = useState(false);
   const [isSavingReview, setIsSavingReview] = useState(false);
   const [isCancelingReview, setIsCancelingReview] = useState(false);
+  const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
   const [error, setError] = useState("");
 
   const hasFiles = uploads.length > 0;
@@ -564,15 +565,6 @@ export function UploadClient({
   async function cancelActiveReview() {
     if (!activeReview) return;
 
-    const isLast = activeReviewIndex >= savedReviews.length - 1;
-    const confirmed = window.confirm(
-      isLast
-        ? `Cancel ${activeReview.receipt.record_r_number}? This removes the uploaded Google Drive file.`
-        : `Cancel ${activeReview.receipt.record_r_number} and move to the next receipt? This removes the uploaded Google Drive file.`,
-    );
-
-    if (!confirmed) return;
-
     setError("");
     setIsCancelingReview(true);
     const response = await fetch("/api/upload/cancel", {
@@ -590,6 +582,7 @@ export function UploadClient({
       return;
     }
 
+    setIsCancelConfirmOpen(false);
     setCompletedReviews((current) => current + 1);
     setActiveReviewIndex((current) => current + 1);
   }
@@ -689,18 +682,55 @@ export function UploadClient({
           </div>
         </>
       ) : (
-        <SavedReceiptReview
-          completed={completedReviews}
-          categories={categories}
-          isCanceling={isCancelingReview}
-          isSaving={isSavingReview}
-          itemCategories={itemCategories}
-          onCancel={cancelActiveReview}
-          onSubmit={saveActiveReview}
-          review={activeReview}
-          reviewIndex={activeReviewIndex}
-          total={savedReviews.length}
-        />
+        <>
+          <SavedReceiptReview
+            key={activeReview.receipt.record_r_number}
+            completed={completedReviews}
+            categories={categories}
+            isCanceling={isCancelingReview}
+            isSaving={isSavingReview}
+            itemCategories={itemCategories}
+            onCancel={() => setIsCancelConfirmOpen(true)}
+            onSubmit={saveActiveReview}
+            review={activeReview}
+            reviewIndex={activeReviewIndex}
+            total={savedReviews.length}
+          />
+          {isCancelConfirmOpen ? (
+            <div
+              aria-modal="true"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+              role="dialog"
+            >
+              <div className="w-full max-w-md rounded-lg border border-foreground/10 bg-background p-6 shadow-xl">
+                <h2 className="text-lg font-semibold">Cancel this one?</h2>
+                <p className="mt-3 text-sm text-foreground/70">
+                  This will remove the uploaded Google Drive file for{" "}
+                  {activeReview.receipt.record_r_number}. The next receipt will
+                  open after this one is canceled.
+                </p>
+                <div className="mt-6 flex justify-end gap-3">
+                  <button
+                    className="h-10 rounded-md border border-foreground/20 px-4 text-sm font-medium transition-colors hover:bg-foreground/5"
+                    disabled={isCancelingReview}
+                    onClick={() => setIsCancelConfirmOpen(false)}
+                    type="button"
+                  >
+                    Keep Reviewing
+                  </button>
+                  <button
+                    className="h-10 rounded-md bg-red-700 px-4 text-sm font-semibold text-white disabled:bg-red-700/40"
+                    disabled={isCancelingReview}
+                    onClick={cancelActiveReview}
+                    type="button"
+                  >
+                    {isCancelingReview ? "Canceling..." : "Cancel This One"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </>
       )}
 
       {!activeReview && savedReviews.length > 0 && completedReviews >= savedReviews.length ? (
@@ -967,9 +997,7 @@ function SavedReceiptReview({
           >
             {isCanceling
               ? "Canceling..."
-              : isLast
-                ? "Cancel"
-                : "Cancel This and Next"}
+              : "Cancel This One"}
           </button>
           <button
             className="h-12 rounded-md bg-green-700 px-5 text-sm font-semibold uppercase tracking-wide text-white disabled:cursor-not-allowed disabled:bg-green-700/40"
