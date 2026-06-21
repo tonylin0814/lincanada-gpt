@@ -14,6 +14,7 @@ export type ReceiptOcrResult = {
   authorization_code: string | null;
   receipt_date: string | null;
   receipt_time: string | null;
+  category: string | null;
   subtotal: number | null;
   taxes: ReceiptOcrTax[];
   tips: number | null;
@@ -30,6 +31,7 @@ const emptyResult: ReceiptOcrResult = {
   authorization_code: null,
   receipt_date: null,
   receipt_time: null,
+  category: null,
   subtotal: null,
   taxes: [],
   tips: null,
@@ -70,7 +72,7 @@ export async function ocrReceipt(imageBase64: string): Promise<ReceiptOcrResult>
           {
             type: "text",
             text:
-              "Extract this receipt into JSON with these keys: vendor, vendor_address, store_number, receipt_number, transaction_number, authorization_code, receipt_date, receipt_time, subtotal, taxes, tips, grand_total, payment_method. taxes must be an array of {name, amount}.",
+              "Extract this receipt into JSON with these keys: vendor, vendor_address, store_number, receipt_number, transaction_number, authorization_code, receipt_date, receipt_time, category, subtotal, taxes, tips, grand_total, payment_method. taxes must be an array of {name, amount}.",
           },
           {
             type: "image_url",

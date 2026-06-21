@@ -57,12 +57,13 @@ export type ReceiptUpdateInput = {
   transaction_number: string | null;
   authorization_code: string | null;
   review_notes: string | null;
-  items: Array<{
-    id: number;
-    item_name: string;
-    item_category: string;
-    item_qty: string | null;
-    item_price: string | null;
+    items: Array<{
+      id: number;
+      item_name: string;
+      adjusted_item_name: string | null;
+      item_category: string;
+      item_qty: string | null;
+      item_price: string | null;
     item_total_price: string | null;
   }>;
 };
@@ -438,21 +439,23 @@ export async function updateReceiptForReview(
 
     for (const item of input.items) {
       await client.query(
-        `UPDATE receipt_items
-         SET item_name = $2,
-             item_category = $3,
-             item_qty = $4,
-             item_price = $5,
-             item_total_price = $6
-         WHERE id = $1 AND record_r_number = $7`,
-        [
-          item.id,
-          item.item_name,
-          item.item_category,
-          item.item_qty,
-          item.item_price,
-          item.item_total_price,
-          record_r_number,
+          `UPDATE receipt_items
+           SET item_name = $2,
+               adjusted_item_name = $3,
+               item_category = $4,
+               item_qty = $5,
+               item_price = $6,
+               item_total_price = $7
+           WHERE id = $1 AND record_r_number = $8`,
+          [
+            item.id,
+            item.item_name,
+            item.adjusted_item_name || item.item_name,
+            item.item_category,
+            item.item_qty,
+            item.item_price,
+            item.item_total_price,
+            record_r_number,
         ],
       );
     }
@@ -468,6 +471,21 @@ export async function updateReceiptForReview(
 export async function deleteReceipt(client: Client, record_r_number: string) {
   const result = await client.query<Receipt>(
     `DELETE FROM receipts
+     WHERE record_r_number = $1
+     RETURNING *`,
+    [record_r_number],
+  );
+
+  return result.rows[0] ?? null;
+}
+
+export async function clearReceiptAttachment(
+  client: Client,
+  record_r_number: string,
+) {
+  const result = await client.query<Receipt>(
+    `UPDATE receipts
+     SET attachment_link = NULL
      WHERE record_r_number = $1
      RETURNING *`,
     [record_r_number],

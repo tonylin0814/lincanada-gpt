@@ -140,7 +140,7 @@ async function createReceipt(
         ocr.authorization_code,
         receiptDate,
         ocr.receipt_time,
-        "Other",
+        ocr.category ?? "Other",
         normalizeAmount(ocr.subtotal),
         JSON.stringify(ocr.taxes ?? []),
         normalizeAmount(ocr.tips),

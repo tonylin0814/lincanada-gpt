@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth";
-import { getWebAppDb } from "@/lib/db";
+import { getUserDb, getWebAppDb } from "@/lib/db";
+import { getReceiptCategories } from "@/lib/queries";
 import { UploadClient } from "./upload-client";
 
 export default async function UploadPage() {
@@ -23,6 +24,14 @@ export default async function UploadPage() {
   const hasGoogleConnection = Boolean(
     googleUser?.google_access_token || googleUser?.google_refresh_token,
   );
+  const userDb = await getUserDb(session.user.supabase_connection_string);
+  let categories: string[] = [];
+
+  try {
+    categories = await getReceiptCategories(userDb);
+  } finally {
+    await userDb.end();
+  }
 
   return (
     <main className="min-h-screen bg-background px-6 py-10 text-foreground">
@@ -34,6 +43,7 @@ export default async function UploadPage() {
           Extract filename, photo time, and GPS metadata before OCR.
         </p>
         <UploadClient
+          categories={categories}
           hasGoogleConnection={hasGoogleConnection}
           hasGoogleFolder={hasGoogleFolder}
         />

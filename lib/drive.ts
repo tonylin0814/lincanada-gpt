@@ -27,6 +27,14 @@ export function getGoogleOAuthClient() {
 
 type GoogleOAuthClient = ReturnType<typeof getGoogleOAuthClient>;
 
+export function getDriveFileId(url: string | null) {
+  if (!url) return null;
+
+  const fileMatch = url.match(/\/file\/d\/([^/]+)/);
+  const openMatch = url.match(/[?&]id=([^&]+)/);
+  return fileMatch?.[1] ?? openMatch?.[1] ?? null;
+}
+
 export function getGoogleOAuthUrl(state: string) {
   const auth = getGoogleOAuthClient();
   return auth.generateAuthUrl({
@@ -136,4 +144,15 @@ export async function uploadFile(
   });
 
   return file.data.webViewLink ?? `https://drive.google.com/file/d/${fileId}/view`;
+}
+
+export async function deleteFile(auth: GoogleOAuthClient, fileUrl: string | null) {
+  const fileId = getDriveFileId(fileUrl);
+
+  if (!fileId) {
+    return;
+  }
+
+  const drive = google.drive({ version: "v3", auth });
+  await drive.files.delete({ fileId });
 }

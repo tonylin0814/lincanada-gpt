@@ -27,9 +27,11 @@ type UploadFile = {
 type SavedReview = {
   receipt: Receipt;
   items: ReceiptItem[];
+  archive_action: "link" | "create";
 };
 
 type UploadClientProps = {
+  categories: string[];
   hasGoogleConnection: boolean;
   hasGoogleFolder: boolean;
 };
@@ -51,6 +53,7 @@ const emptyOcr: ReceiptOcrResult = {
   authorization_code: null,
   receipt_date: null,
   receipt_time: null,
+  category: null,
   subtotal: null,
   taxes: [],
   tips: null,
@@ -145,6 +148,9 @@ function buildSavePayload(form: HTMLFormElement, review: SavedReview) {
     items: review.items.map((item) => ({
       id: item.id,
       item_name: String(formData.get(`item_name_${item.id}`) ?? ""),
+      adjusted_item_name:
+        toNullableString(formData.get(`adjusted_item_name_${item.id}`)) ??
+        String(formData.get(`item_name_${item.id}`) ?? ""),
       item_category: String(formData.get(`item_category_${item.id}`) ?? ""),
       item_qty: toNullableString(formData.get(`item_qty_${item.id}`)),
       item_price: toNullableString(formData.get(`item_price_${item.id}`)),
@@ -163,6 +169,7 @@ function matchLabel(match: MatchResult | null) {
 }
 
 export function UploadClient({
+  categories,
   hasGoogleConnection,
   hasGoogleFolder,
 }: UploadClientProps) {
@@ -173,6 +180,7 @@ export function UploadClient({
   const [isProcessing, setIsProcessing] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
   const [isSavingReview, setIsSavingReview] = useState(false);
+  const [isCancelingReview, setIsCancelingReview] = useState(false);
   const [error, setError] = useState("");
 
   const hasFiles = uploads.length > 0;
@@ -429,6 +437,7 @@ export function UploadClient({
 
       const archiveBody = (await response.json()) as {
         record_r_number: string;
+        action: "link" | "create";
       };
       const detail = await fetch(
         `/api/records/receipts/${encodeURIComponent(
@@ -437,8 +446,11 @@ export function UploadClient({
       );
 
       if (detail.ok) {
-        const detailBody = (await detail.json()) as SavedReview;
-        reviews.push(detailBody);
+        const detailBody = (await detail.json()) as Omit<
+          SavedReview,
+          "archive_action"
+        >;
+        reviews.push({ ...detailBody, archive_action: archiveBody.action });
       }
 
       if (upload.preview_url) URL.revokeObjectURL(upload.preview_url);
@@ -471,6 +483,39 @@ export function UploadClient({
     setIsSavingReview(false);
     if (!response.ok) {
       setError("Could not save receipt changes.");
+      return;
+    }
+
+    setCompletedReviews((current) => current + 1);
+    setActiveReviewIndex((current) => current + 1);
+  }
+
+  async function cancelActiveReview() {
+    if (!activeReview) return;
+
+    const isLast = activeReviewIndex >= savedReviews.length - 1;
+    const confirmed = window.confirm(
+      isLast
+        ? `Cancel ${activeReview.receipt.record_r_number}? This removes the uploaded Google Drive file.`
+        : `Cancel ${activeReview.receipt.record_r_number} and move to the next receipt? This removes the uploaded Google Drive file.`,
+    );
+
+    if (!confirmed) return;
+
+    setError("");
+    setIsCancelingReview(true);
+    const response = await fetch("/api/upload/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        record_r_number: activeReview.receipt.record_r_number,
+        archive_action: activeReview.archive_action,
+      }),
+    });
+    setIsCancelingReview(false);
+
+    if (!response.ok) {
+      setError("Could not cancel this upload.");
       return;
     }
 
@@ -561,6 +606,7 @@ export function UploadClient({
                   updateUpload(upload.id, { selected_record_r_number: value })
                 }
                 onTaxBlur={updateOcrTax}
+                categories={categories}
                 upload={upload}
               />
             ))}
@@ -569,9 +615,13 @@ export function UploadClient({
       ) : (
         <SavedReceiptReview
           completed={completedReviews}
+          categories={categories}
+          isCanceling={isCancelingReview}
           isSaving={isSavingReview}
+          onCancel={cancelActiveReview}
           onSubmit={saveActiveReview}
           review={activeReview}
+          reviewIndex={activeReviewIndex}
           total={savedReviews.length}
         />
       )}
@@ -581,7 +631,7 @@ export function UploadClient({
           <p className="text-base font-semibold">Upload Success!</p>
           <p className="mt-1">
             {completedReviews}/{savedReviews.length} done. All uploaded receipts
-            were saved.
+            have been handled.
           </p>
         </div>
       ) : null}
@@ -591,11 +641,13 @@ export function UploadClient({
 
 function UploadEditCard({
   upload,
+  categories,
   onFieldBlur,
   onTaxBlur,
   onRecordChange,
 }: {
   upload: UploadFile;
+  categories: string[];
   onFieldBlur: (
     upload: UploadFile,
     field: keyof ReceiptOcrResult,
@@ -669,7 +721,6 @@ function UploadEditCard({
               ["vendor_address", "Vendor Address", ocr.vendor_address ?? ""],
               ["receipt_date", "Receipt Date", ocr.receipt_date ?? ""],
               ["receipt_time", "Receipt Time", ocr.receipt_time ?? ""],
-              ["category", "Category", "Other"],
               ["subtotal", "Sub-Total", ocr.subtotal ?? ""],
               ["tips", "Tips", ocr.tips ?? ""],
               ["grand_total", "Total", ocr.grand_total ?? ""],
@@ -697,6 +748,22 @@ function UploadEditCard({
                 />
               </label>
             ))}
+            <label className="block text-sm">
+              Category
+              <select
+                className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3"
+                defaultValue={ocr.category ?? "Other"}
+                onBlur={(event) =>
+                  onFieldBlur(upload, "category", event.currentTarget.value)
+                }
+              >
+                {categories.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
           <fieldset className="mt-4">
@@ -767,20 +834,29 @@ function UploadEditCard({
 
 function SavedReceiptReview({
   review,
+  categories,
   completed,
   total,
+  reviewIndex,
   isSaving,
+  isCanceling,
+  onCancel,
   onSubmit,
 }: {
   review: SavedReview;
+  categories: string[];
   completed: number;
   total: number;
+  reviewIndex: number;
   isSaving: boolean;
+  isCanceling: boolean;
+  onCancel: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const receipt = review.receipt;
   const taxRows = getTaxRows(receipt.taxes);
   const previewUrl = getDrivePreviewUrl(receipt.attachment_link);
+  const isLast = reviewIndex >= total - 1;
 
   return (
     <form className="space-y-6" onSubmit={onSubmit}>
@@ -793,13 +869,27 @@ function SavedReceiptReview({
             Review {receipt.record_r_number}
           </h2>
         </div>
-        <button
-          className="h-12 rounded-md bg-green-700 px-5 text-sm font-semibold uppercase tracking-wide text-white disabled:cursor-not-allowed disabled:bg-green-700/40"
-          disabled={isSaving}
-          type="submit"
-        >
-          {isSaving ? "Saving..." : "Save and Next"}
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button
+            className="h-12 rounded-md border border-red-600 px-5 text-sm font-semibold uppercase tracking-wide text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={isCanceling || isSaving}
+            onClick={onCancel}
+            type="button"
+          >
+            {isCanceling
+              ? "Canceling..."
+              : isLast
+                ? "Cancel"
+                : "Cancel This and Next"}
+          </button>
+          <button
+            className="h-12 rounded-md bg-green-700 px-5 text-sm font-semibold uppercase tracking-wide text-white disabled:cursor-not-allowed disabled:bg-green-700/40"
+            disabled={isSaving || isCanceling}
+            type="submit"
+          >
+            {isSaving ? "Saving..." : isLast ? "Save" : "Save and Next"}
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-[minmax(320px,1fr)_minmax(0,1.35fr)]">
@@ -820,7 +910,6 @@ function SavedReceiptReview({
             {[
               ["vendor", "Vendor", receipt.vendor],
               ["receipt_date", "Date", dateInputValue(receipt.receipt_date)],
-              ["category", "Category", receipt.category],
               ["subtotal", "Subtotal", receipt.subtotal ?? ""],
               ["tips", "Tips", receipt.tips ?? ""],
               ["grand_total", "Grand total", receipt.grand_total ?? ""],
@@ -847,6 +936,20 @@ function SavedReceiptReview({
                 />
               </label>
             ))}
+            <label className="block text-sm">
+              Category
+              <select
+                className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3"
+                defaultValue={receipt.category}
+                name="category"
+              >
+                {categories.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </label>
             <fieldset className="md:col-span-2">
               <legend className="text-sm font-medium">Taxes</legend>
               <div className="mt-2 grid gap-3 md:grid-cols-2">
@@ -887,6 +990,7 @@ function SavedReceiptReview({
               <thead className="bg-foreground/5">
                 <tr>
                   <th className="px-3 py-2">Item</th>
+                  <th className="px-3 py-2">Adjusted Item</th>
                   <th className="px-3 py-2">Category</th>
                   <th className="px-3 py-2">Qty</th>
                   <th className="px-3 py-2">Price</th>
@@ -899,6 +1003,10 @@ function SavedReceiptReview({
                     <tr className="border-t border-foreground/10" key={item.id}>
                       {[
                         ["item_name", item.item_name],
+                        [
+                          "adjusted_item_name",
+                          item.adjusted_item_name ?? item.item_name,
+                        ],
                         ["item_category", item.item_category],
                         ["item_qty", item.item_qty ?? ""],
                         ["item_price", item.item_price ?? ""],
@@ -916,7 +1024,7 @@ function SavedReceiptReview({
                   ))
                 ) : (
                   <tr>
-                    <td className="px-3 py-4 text-foreground/60" colSpan={5}>
+                    <td className="px-3 py-4 text-foreground/60" colSpan={6}>
                       No item rows extracted yet.
                     </td>
                   </tr>
