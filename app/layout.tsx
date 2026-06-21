@@ -21,8 +21,12 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Lincanada_GPT",
+  title: "Lin System",
   description: "Personal life management companion app",
+  icons: {
+    icon: "/lin-system-logo.png",
+    apple: "/lin-system-logo.png",
+  },
 };
 
 export default async function RootLayout({

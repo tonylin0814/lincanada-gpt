@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -179,8 +180,15 @@ export function DashboardNavigation({
 
   return (
     <nav className="mx-auto flex max-w-6xl items-center gap-4">
-      <Link className="font-semibold" href="/dashboard">
-        Lincanada_GPT
+      <Link className="flex items-center gap-2 font-semibold" href="/dashboard">
+        <Image
+          alt=""
+          className="h-8 w-8 rounded-lg"
+          height={32}
+          src="/lin-system-logo.png"
+          width={32}
+        />
+        Lin System
       </Link>
       <FinanceMenu
         entities={entities}
