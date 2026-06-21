@@ -48,7 +48,15 @@ function createUploadFiles(files: File[]) {
   }));
 }
 
-export function UploadClient() {
+type UploadClientProps = {
+  hasGoogleConnection: boolean;
+  hasGoogleFolder: boolean;
+};
+
+export function UploadClient({
+  hasGoogleConnection,
+  hasGoogleFolder,
+}: UploadClientProps) {
   const [uploads, setUploads] = useState<UploadFile[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
@@ -266,6 +274,26 @@ export function UploadClient() {
 
   return (
     <div className="mt-8">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border border-foreground/10 px-4 py-3 text-sm">
+        <div>
+          <p className="font-medium">Google Drive</p>
+          <p className="mt-1 text-foreground/65">
+            {hasGoogleFolder
+              ? hasGoogleConnection
+                ? "Connected and ready to archive uploads."
+                : "Folder is set, but Google Drive is not connected yet."
+              : "A Google Drive folder ID is required before archiving."}
+          </p>
+        </div>
+        {!hasGoogleConnection ? (
+          <a
+            className="inline-flex h-10 items-center rounded-md bg-foreground px-4 text-sm font-medium text-background"
+            href="/api/auth/google"
+          >
+            Connect Google Drive
+          </a>
+        ) : null}
+      </div>
       <label
         className="flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-foreground/30 px-6 py-10 text-center transition-colors hover:bg-foreground/5"
         onDragOver={(event) => event.preventDefault()}
@@ -301,7 +329,7 @@ export function UploadClient() {
         </button>
         <button
           className="h-10 rounded-md border border-foreground/20 px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={!canConfirm || isConfirming}
+          disabled={!canConfirm || isConfirming || !hasGoogleFolder}
           onClick={confirmAll}
           type="button"
         >
@@ -337,7 +365,18 @@ export function UploadClient() {
                 <p className="font-medium">{upload.file.name}</p>
                 <p className="text-foreground/60">{upload.status}</p>
                 {upload.error ? (
-                  <p className="mt-1 text-red-600">{upload.error}</p>
+                  <p className="mt-1 text-red-600">
+                    {upload.error.includes("/api/auth/google") ? (
+                      <>
+                        Google Drive is not connected.{" "}
+                        <a className="underline" href="/api/auth/google">
+                          Connect Google Drive
+                        </a>
+                      </>
+                    ) : (
+                      upload.error
+                    )}
+                  </p>
                 ) : null}
                 {upload.archive_result ? (
                   <p className="mt-1 text-foreground/70">

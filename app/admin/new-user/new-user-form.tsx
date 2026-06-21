@@ -6,7 +6,37 @@ import { useRouter } from "next/navigation";
 export function NewUserForm() {
   const router = useRouter();
   const [error, setError] = useState("");
+  const [connectionStatus, setConnectionStatus] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
+
+  async function testConnection(form: HTMLFormElement) {
+    setError("");
+    setConnectionStatus("");
+    setIsTestingConnection(true);
+
+    const formData = new FormData(form);
+    const response = await fetch("/api/admin/supabase-test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        supabase_connection_string: formData.get("supabase_connection_string"),
+      }),
+    });
+
+    setIsTestingConnection(false);
+
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      setConnectionStatus("");
+      setError(body?.error ?? "Could not connect to Supabase.");
+      return;
+    }
+
+    setConnectionStatus("Supabase connection works.");
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -79,6 +109,19 @@ export function NewUserForm() {
           required
         />
       </label>
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          className="h-10 rounded-md border border-foreground/20 px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={isTestingConnection}
+          onClick={(event) => testConnection(event.currentTarget.form!)}
+          type="button"
+        >
+          {isTestingConnection ? "Testing..." : "Test Supabase"}
+        </button>
+        {connectionStatus ? (
+          <span className="text-sm text-green-700">{connectionStatus}</span>
+        ) : null}
+      </div>
       <label className="block">
         <span className="text-sm font-medium">Google Drive folder ID</span>
         <input

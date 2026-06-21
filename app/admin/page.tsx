@@ -16,9 +16,15 @@ export default async function AdminPage() {
     <main className="min-h-screen bg-background px-6 py-10 text-foreground">
       <div className="mx-auto max-w-6xl">
         <div className="flex items-center justify-between gap-4">
-          <h1 className="text-2xl font-semibold tracking-normal">
-            Admin Panel
-          </h1>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-normal">
+              User Management
+            </h1>
+            <p className="mt-2 text-sm text-foreground/65">
+              Each user signs in here and connects to their own Supabase
+              database.
+            </p>
+          </div>
           <Link
             className="inline-flex h-10 items-center rounded-md bg-foreground px-4 text-sm font-medium text-background"
             href="/admin/new-user"
