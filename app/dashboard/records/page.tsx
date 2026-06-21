@@ -224,7 +224,7 @@ function ReceiptsTable({ receipts }: { receipts: Receipt[] }) {
                     receipt.record_r_number,
                   )}`}
                 >
-                  View
+                  Review
                 </Link>
               </td>
             </tr>
@@ -273,7 +273,7 @@ function InvoicesTable({ invoices }: { invoices: Invoice[] }) {
                     invoice.record_i_number,
                   )}`}
                 >
-                  View
+                  Review
                 </Link>
               </td>
             </tr>

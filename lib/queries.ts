@@ -46,16 +46,21 @@ export type ReviewQueueRecord = {
 
 export type ReceiptUpdateInput = {
   vendor: string;
+  vendor_address: string | null;
   receipt_date: string;
+  receipt_time: string | null;
   category: string;
   subtotal: string | null;
   taxes: JsonValue;
   tips: string | null;
   grand_total: string | null;
+  currency: string;
   payment_method: string | null;
   receipt_number: string | null;
   transaction_number: string | null;
   authorization_code: string | null;
+  invoice_number: string | null;
+  card_last_four: string | null;
   review_notes: string | null;
     items: Array<{
       id: number;
@@ -417,40 +422,71 @@ export async function updateReceiptForReview(
 ) {
   await client.query("BEGIN");
   try {
+    if (input.category.trim()) {
+      await client.query(
+        `INSERT INTO receipt_categories (name)
+         SELECT $1
+         WHERE NOT EXISTS (
+           SELECT 1 FROM receipt_categories WHERE LOWER(name) = LOWER($1)
+         )`,
+        [input.category.trim()],
+      );
+    }
+
     const receiptResult = await client.query<Receipt>(
       `UPDATE receipts
        SET vendor = $2,
-           receipt_date = $3,
-           category = $4,
-           subtotal = $5,
-           taxes = $6::jsonb,
-           tips = $7,
-           grand_total = $8,
-           payment_method = $9,
-           receipt_number = $10,
-           transaction_number = $11,
-           authorization_code = $12,
-           review_notes = $13
+           vendor_address = $3,
+           receipt_date = $4,
+           receipt_time = $5,
+           category = $6,
+           subtotal = $7,
+           taxes = $8::jsonb,
+           tips = $9,
+           grand_total = $10,
+           currency = $11,
+           payment_method = $12,
+           receipt_number = $13,
+           transaction_number = $14,
+           authorization_code = $15,
+           invoice_number = $16,
+           card_last_four = $17,
+           review_notes = $18
        WHERE record_r_number = $1
        RETURNING *`,
       [
         record_r_number,
         input.vendor,
+        input.vendor_address,
         input.receipt_date,
+        input.receipt_time,
         input.category,
         input.subtotal,
         JSON.stringify(input.taxes),
         input.tips,
         input.grand_total,
+        input.currency || "CAD",
         input.payment_method,
         input.receipt_number,
         input.transaction_number,
         input.authorization_code,
+        input.invoice_number,
+        input.card_last_four,
         input.review_notes,
       ],
     );
 
     for (const item of input.items) {
+      if (item.item_category.trim()) {
+        await client.query(
+          `INSERT INTO item_categories (name)
+           SELECT $1
+           WHERE NOT EXISTS (
+             SELECT 1 FROM item_categories WHERE LOWER(name) = LOWER($1)
+           )`,
+          [item.item_category.trim()],
+        );
+      }
       await client.query(
           `UPDATE receipt_items
            SET item_name = $2,
@@ -482,14 +518,24 @@ export async function updateReceiptForReview(
 }
 
 export async function deleteReceipt(client: Client, record_r_number: string) {
-  const result = await client.query<Receipt>(
-    `DELETE FROM receipts
-     WHERE record_r_number = $1
-     RETURNING *`,
-    [record_r_number],
-  );
-
-  return result.rows[0] ?? null;
+  await client.query("BEGIN");
+  try {
+    await client.query(
+      "DELETE FROM receipt_items WHERE record_r_number = $1",
+      [record_r_number],
+    );
+    const result = await client.query<Receipt>(
+      `DELETE FROM receipts
+       WHERE record_r_number = $1
+       RETURNING *`,
+      [record_r_number],
+    );
+    await client.query("COMMIT");
+    return result.rows[0] ?? null;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  }
 }
 
 export async function clearReceiptAttachment(
