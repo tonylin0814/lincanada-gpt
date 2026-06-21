@@ -20,6 +20,29 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+a {
+  text-underline-offset: 3px;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease,
+    text-decoration-color 150ms ease;
+}
+
+a:not([class*="bg-"]):hover {
+  color: #1d4ed8;
+  text-decoration-color: #1d4ed8;
+}
+
+a.underline:hover {
+  text-decoration-thickness: 2px;
+}
+
+a:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 3px;
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;
