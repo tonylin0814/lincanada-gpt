@@ -19,6 +19,8 @@ export type NavigationEntity = {
 };
 
 const selectedCompanyKey = "lincanada:selected-company-id";
+const menuItemClass =
+  "block rounded-md px-3 py-2 text-foreground/75 hover:bg-blue-700 hover:text-white focus-visible:bg-blue-700 focus-visible:text-white";
 
 function buildHref(path: string, params: Record<string, string | number | null>) {
   const query = new URLSearchParams();
@@ -47,19 +49,19 @@ function SectionLinks({
   return (
     <div className="mt-2 grid gap-1">
       <Link
-        className="rounded px-2 py-1.5 hover:bg-foreground/5"
+        className={menuItemClass}
         href={buildHref("/dashboard/records", { tab, entity_id: entityId })}
       >
         {isExpense ? "Expense Records" : "Revenue Records"}
       </Link>
       <Link
-        className="rounded px-2 py-1.5 hover:bg-foreground/5"
+        className={menuItemClass}
         href={buildHref("/dashboard/upload", { mode, entity_id: entityId })}
       >
         {isExpense ? "Upload Receipts" : "Upload Invoices"}
       </Link>
       <Link
-        className="rounded px-2 py-1.5 hover:bg-foreground/5"
+        className={menuItemClass}
         href={buildHref("/dashboard/reports", { type: kind, entity_id: entityId })}
       >
         {isExpense ? "Expense Reports" : "Revenue Reports"}
@@ -91,7 +93,7 @@ function FinanceMenu({
   return (
     <div className="group relative">
       <button
-        className="h-9 rounded-md px-2 text-foreground/75 hover:bg-foreground/5 hover:text-foreground"
+        className="h-9 rounded-md px-2 text-foreground/75 group-hover:bg-foreground/5 group-hover:text-foreground hover:bg-foreground/5 hover:text-foreground"
         type="button"
       >
         {title}
