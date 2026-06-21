@@ -164,11 +164,39 @@ function buildSavePayload(form: HTMLFormElement, review: SavedReview) {
   };
 }
 
-function matchLabel(match: MatchResult | null) {
-  if (!match) return "Not matched yet";
-  if (match.match) return `Matched ${match.match.record_r_number} (${match.confidence}%)`;
-  if (match.candidates?.length) return "Pick a matching record";
-  return "Will create a new record";
+function matchDisplay(upload: UploadFile) {
+  const match = upload.match_result;
+
+  if (!match) {
+    return {
+      className: "font-medium text-foreground",
+      label: "Not matched yet",
+    };
+  }
+
+  if (!upload.selected_record_r_number) {
+    return {
+      className: "font-medium text-red-600",
+      label: "Will create a new record",
+    };
+  }
+
+  const isCertainAutoMatch =
+    match.action === "auto" &&
+    match.confidence >= 100 &&
+    match.match?.record_r_number === upload.selected_record_r_number;
+
+  if (isCertainAutoMatch) {
+    return {
+      className: "font-medium text-green-700",
+      label: `Matched ${upload.selected_record_r_number} (${match.confidence}%)`,
+    };
+  }
+
+  return {
+    className: "font-medium text-red-600",
+    label: `Possible match ${upload.selected_record_r_number} (${match.confidence}%)`,
+  };
 }
 
 export function UploadClient({
@@ -684,6 +712,7 @@ function UploadEditCard({
     ...(upload.match_result?.match ? [upload.match_result.match] : []),
     ...(upload.match_result?.candidates ?? []),
   ];
+  const display = matchDisplay(upload);
 
   return (
     <article className="overflow-hidden rounded-md border border-foreground/10">
@@ -819,7 +848,7 @@ function UploadEditCard({
           </fieldset>
 
           <div className="mt-4 border-t border-foreground/10 pt-4 text-sm">
-            <p className="font-medium">{matchLabel(upload.match_result)}</p>
+            <p className={display.className}>{display.label}</p>
             {matchOptions.length > 0 ? (
               <label className="mt-2 block">
                 Force match
