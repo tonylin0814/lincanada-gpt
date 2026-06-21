@@ -264,7 +264,7 @@ function buildPrintHtml({
         <style>
           @page {
             margin: 0.35in;
-            size: letter landscape;
+            size: letter portrait;
           }
 
           * {
@@ -284,13 +284,6 @@ function buildPrintHtml({
             text-align: left;
           }
 
-          .top {
-            display: grid;
-            gap: 18px;
-            grid-template-columns: 1fr 1fr;
-            margin-bottom: 18px;
-          }
-
           .summary {
             display: grid;
             gap: 8px;
@@ -298,9 +291,7 @@ function buildPrintHtml({
           }
 
           .layout {
-            display: grid;
-            gap: 26px;
-            grid-template-columns: 39% 1fr;
+            display: block;
           }
 
           .preview {
@@ -308,12 +299,13 @@ function buildPrintHtml({
             border: 2px solid #0e7490;
             display: flex;
             justify-content: center;
-            min-height: 520px;
+            margin-bottom: 18px;
+            min-height: 340px;
             padding: 10px;
           }
 
           .preview img {
-            max-height: 780px;
+            max-height: 500px;
             max-width: 100%;
             object-fit: contain;
           }
@@ -393,13 +385,9 @@ function buildPrintHtml({
       <body>
         <h1>${escapeHtml(ownerName)} Receipt</h1>
 
-        <div class="top">
-          <div class="summary">
-            ${detailRow("Record Number", receipt.record_r_number)}
-          </div>
-          <div class="summary">
-            ${detailRow("Vendor", receipt.vendor)}
-          </div>
+        <div class="summary">
+          ${detailRow("Record Number", receipt.record_r_number)}
+          ${detailRow("Vendor", receipt.vendor)}
         </div>
 
         <div class="layout">
@@ -526,7 +514,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
 
     const pdf = await page.pdf({
       format: "letter",
-      landscape: true,
+      landscape: false,
       margin: {
         bottom: "0.35in",
         left: "0.35in",
