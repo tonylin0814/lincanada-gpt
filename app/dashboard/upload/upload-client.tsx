@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, DragEvent, FormEvent, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { ExtractedExif } from "@/lib/exif";
 import type { MatchResult } from "@/lib/matcher";
 import type { ReceiptOcrResult } from "@/lib/ocr";
@@ -175,6 +176,7 @@ export function UploadClient({
   hasGoogleFolder,
   itemCategories,
 }: UploadClientProps) {
+  const router = useRouter();
   const [uploads, setUploads] = useState<UploadFile[]>([]);
   const [savedReviews, setSavedReviews] = useState<SavedReview[]>([]);
   const [activeReviewIndex, setActiveReviewIndex] = useState(0);
@@ -485,6 +487,12 @@ export function UploadClient({
     setIsSavingReview(false);
     if (!response.ok) {
       setError("Could not save receipt changes.");
+      return;
+    }
+
+    if (activeReviewIndex >= savedReviews.length - 1) {
+      router.push("/dashboard/records");
+      router.refresh();
       return;
     }
 
