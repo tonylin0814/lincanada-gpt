@@ -9,7 +9,7 @@ import { startPageLoading } from "@/components/page-loading-indicator";
 type DashboardNavigationProps = {
   entities: NavigationEntity[];
   isAdmin: boolean;
-  unreviewedCount: number;
+  userName: string;
 };
 
 export type NavigationEntity = {
@@ -133,7 +133,7 @@ function FinanceMenu({
 export function DashboardNavigation({
   entities,
   isAdmin,
-  unreviewedCount,
+  userName,
 }: DashboardNavigationProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -206,14 +206,6 @@ export function DashboardNavigation({
         selectedCompanyId={selectedCompanyId}
         title="Revenue"
       />
-      <Link className="text-foreground/75 hover:text-foreground" href="/dashboard/review">
-        Review
-        {unreviewedCount > 0 ? (
-          <span className="ml-2 rounded-full bg-foreground px-2 py-0.5 text-xs text-background">
-            {unreviewedCount}
-          </span>
-        ) : null}
-      </Link>
       <Link className="text-foreground/75 hover:text-foreground" href="/dashboard/settings/categories">
         Settings
       </Link>
@@ -222,6 +214,9 @@ export function DashboardNavigation({
           Admin Panel
         </Link>
       ) : null}
+      <span className="ml-auto text-sm font-medium text-foreground/70">
+        Welcome, {userName}
+      </span>
     </nav>
   );
 }

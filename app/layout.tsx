@@ -7,7 +7,7 @@ import {
 import { PageLoadingIndicator } from "@/components/page-loading-indicator";
 import { getCurrentSession } from "@/lib/auth";
 import { getUserDb } from "@/lib/db";
-import { getEntities, getUnreviewedCount } from "@/lib/queries";
+import { getEntities } from "@/lib/queries";
 import "./globals.css";
 
 const geistSans = localFont({
@@ -36,7 +36,6 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const session = await getCurrentSession();
-  let unreviewedCount = 0;
   let entities: NavigationEntity[] = [];
 
   if (session?.user.supabase_connection_string) {
@@ -46,11 +45,7 @@ export default async function RootLayout({
 
     if (client) {
       try {
-        const [nextUnreviewedCount, nextEntities] = await Promise.all([
-          getUnreviewedCount(client),
-          getEntities(client),
-        ]);
-        unreviewedCount = nextUnreviewedCount;
+        const nextEntities = await getEntities(client);
         entities = nextEntities.map((entity) => ({
           id: entity.id,
           name: entity.name,
@@ -73,7 +68,7 @@ export default async function RootLayout({
             <DashboardNavigation
               entities={entities}
               isAdmin={session.user.is_admin}
-              unreviewedCount={unreviewedCount}
+              userName={session.user.name ?? session.user.email ?? "User"}
             />
           </header>
         ) : null}
