@@ -13,9 +13,30 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
+  const oauthError = url.searchParams.get("error");
+
+  if (oauthError) {
+    return NextResponse.json(
+      { error: `Google authorization failed: ${oauthError}` },
+      { status: 400 },
+    );
+  }
 
   if (!code) {
-    return NextResponse.redirect(getGoogleOAuthUrl(String(session.user.id)));
+    try {
+      return NextResponse.redirect(getGoogleOAuthUrl(String(session.user.id)));
+    } catch (error) {
+      console.error("Could not start Google OAuth:", error);
+      return NextResponse.json(
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : "Could not start Google OAuth.",
+        },
+        { status: 500 },
+      );
+    }
   }
 
   if (state !== String(session.user.id)) {
@@ -23,7 +44,12 @@ export async function GET(request: Request) {
   }
 
   const auth = getGoogleOAuthClient();
-  const { tokens } = await auth.getToken(code);
+  const { tokens } = await auth.getToken(code).catch((error) => {
+    console.error("Could not complete Google OAuth:", error);
+    throw new Error(
+      "Could not complete Google OAuth. Check the Google client secret and authorized redirect URI.",
+    );
+  });
   const db = getWebAppDb();
 
   await db.query(
