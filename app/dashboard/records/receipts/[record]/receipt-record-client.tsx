@@ -235,56 +235,6 @@ export function ReceiptRecordClient({
     window.print();
   }
 
-  function downloadRecordExcel() {
-    const taxes = getTaxRows(receipt.taxes)
-      .filter((tax) => tax.name || tax.amount)
-      .map((tax) => `${tax.name}: ${tax.amount}`)
-      .join("<br>");
-    const itemRows = items
-      .map(
-        (item) => `
-          <tr>
-            <td>${escapeHtml(item.item_name)}</td>
-            <td>${escapeHtml(item.adjusted_item_name ?? item.item_name)}</td>
-            <td>${escapeHtml(item.item_category)}</td>
-            <td>${escapeHtml(item.item_qty)}</td>
-            <td>${escapeHtml(item.item_price)}</td>
-            <td>${escapeHtml(item.item_total_price)}</td>
-          </tr>
-        `,
-      )
-      .join("");
-    const html = `
-      <html>
-        <body>
-          <h1>${escapeHtml(receipt.record_r_number)}</h1>
-          <table border="1">
-            <tr><th>Vendor</th><td>${escapeHtml(receipt.vendor)}</td></tr>
-            <tr><th>Receipt Date</th><td>${escapeHtml(receiptDate)} ${escapeHtml(receipt.receipt_time)}</td></tr>
-            <tr><th>Category</th><td>${escapeHtml(receipt.category)}</td></tr>
-            <tr><th>Sub-Total</th><td>${escapeHtml(receipt.subtotal)}</td></tr>
-            <tr><th>Tax</th><td>${taxes}</td></tr>
-            <tr><th>Total</th><td>${escapeHtml(receipt.grand_total)}</td></tr>
-            <tr><th>Currency</th><td>${escapeHtml(receipt.currency)}</td></tr>
-            <tr><th>Receipt Image</th><td><a href="${escapeHtml(receipt.attachment_link)}">${escapeHtml(receipt.attachment_link)}</a></td></tr>
-          </table>
-          <h2>Items</h2>
-          <table border="1">
-            <tr><th>Item</th><th>Adjusted Item</th><th>Category</th><th>Qty</th><th>Price</th><th>Total</th></tr>
-            ${itemRows}
-          </table>
-        </body>
-      </html>
-    `;
-    const blob = new Blob([html], { type: "application/vnd.ms-excel" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${receipt.record_r_number}.xls`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
@@ -355,13 +305,12 @@ export function ReceiptRecordClient({
           >
             Print Record
           </button>
-          <button
-            className="h-10 rounded-md border border-foreground/20 px-4 text-sm font-medium"
-            onClick={downloadRecordExcel}
-            type="button"
+          <a
+            className="inline-flex h-10 items-center rounded-md border border-foreground/20 px-4 text-sm font-medium"
+            href={`/api/records/receipts/${encodeURIComponent(receipt.record_r_number)}/export`}
           >
             Download Record
-          </button>
+          </a>
           {!editMode ? (
             <button
               className="h-10 rounded-md bg-blue-700 px-4 text-sm font-semibold text-white"
