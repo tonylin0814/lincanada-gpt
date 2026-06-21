@@ -7,7 +7,15 @@ export function getGoogleOAuthClient() {
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
 
   if (!clientId || !clientSecret) {
-    throw new Error("Google OAuth credentials are not configured.");
+    const missing = [
+      !clientId ? "GOOGLE_CLIENT_ID" : null,
+      !clientSecret ? "GOOGLE_CLIENT_SECRET" : null,
+    ].filter(Boolean);
+    throw new Error(
+      `Google OAuth credentials are not configured. Missing: ${missing.join(
+        ", ",
+      )}.`,
+    );
   }
 
   return new google.auth.OAuth2(
