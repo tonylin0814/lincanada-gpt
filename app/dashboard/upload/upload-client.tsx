@@ -80,6 +80,15 @@ function createUploadFiles(files: File[]) {
   }));
 }
 
+function fallbackExif(file: File): ExtractedExif {
+  return {
+    filename: file.name,
+    photo_taken_at: null,
+    gps_lat: null,
+    gps_lng: null,
+  };
+}
+
 function toNullableString(value: FormDataEntryValue | null) {
   const stringValue = String(value || "").trim();
   return stringValue || null;
@@ -369,29 +378,24 @@ export function UploadClient({
     const formData = new FormData();
     uploads.forEach((upload) => formData.append("files", upload.file));
 
-    const response = await fetch("/api/upload/exif", {
+    const metadataFiles = await fetch("/api/upload/exif", {
       method: "POST",
       body: formData,
-    });
+    })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        const body = (await response.json()) as { files?: ExtractedExif[] };
+        return body.files ?? null;
+      })
+      .catch(() => null);
 
-    if (!response.ok) {
-      setError("Could not read image metadata.");
-      setUploads((current) =>
-        current.map((upload) => ({ ...upload, status: "Error" })),
-      );
-      setIsProcessing(false);
-      return;
+    if (!metadataFiles) {
+      setError("");
     }
 
-    const body = (await response.json()) as { files: ExtractedExif[] };
     const processedUploads = await Promise.all(
       uploads.map(async (upload, index) => {
-        const exif = body.files[index] ?? {
-          filename: upload.file.name,
-          photo_taken_at: null,
-          gps_lat: null,
-          gps_lng: null,
-        };
+        const exif = metadataFiles?.[index] ?? fallbackExif(upload.file);
 
         updateUpload(upload.id, { exif, status: "Matching" });
 
