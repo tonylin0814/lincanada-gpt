@@ -209,6 +209,7 @@ export function ReceiptRecordClient({
   const [notice, setNotice] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const taxRows = useMemo(() => getTaxRows(receipt.taxes), [receipt.taxes]);
   const previewUrl = getDrivePreviewUrl(receipt.attachment_link);
@@ -236,6 +237,49 @@ export function ReceiptRecordClient({
     window.print();
     setNotice("Print command sent.");
     window.setTimeout(() => setNotice(""), 3500);
+  }
+
+  async function downloadRecord() {
+    setError("");
+    setNotice("");
+    setIsDownloading(true);
+
+    try {
+      const response = await fetch(
+        `/api/records/receipts/${encodeURIComponent(receipt.record_r_number)}/download`,
+      );
+      const contentType = response.headers.get("content-type") ?? "";
+
+      if (!response.ok || !contentType.includes("application/pdf")) {
+        const message = await response.text().catch(() => "");
+        setError(
+          message
+            ? `Could not download record PDF. ${message}`
+            : "Could not download record PDF.",
+        );
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${receipt.record_r_number}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      setNotice("Record PDF download started.");
+      window.setTimeout(() => setNotice(""), 3500);
+    } catch (downloadError) {
+      setError(
+        downloadError instanceof Error
+          ? `Could not download record PDF. ${downloadError.message}`
+          : "Could not download record PDF.",
+      );
+    } finally {
+      setIsDownloading(false);
+    }
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -308,14 +352,14 @@ export function ReceiptRecordClient({
           >
             Print Record
           </button>
-          <a
-            className="inline-flex h-10 items-center rounded-md border border-foreground/20 px-4 text-sm font-medium"
-            data-page-loading="false"
-            download={`${receipt.record_r_number}.pdf`}
-            href={`/api/records/receipts/${encodeURIComponent(receipt.record_r_number)}/download`}
+          <button
+            className="h-10 rounded-md border border-foreground/20 px-4 text-sm font-medium disabled:opacity-60"
+            disabled={isDownloading}
+            onClick={downloadRecord}
+            type="button"
           >
-            Download Record
-          </a>
+            {isDownloading ? "Downloading..." : "Download Record"}
+          </button>
           {!editMode ? (
             <button
               className="h-10 rounded-md bg-blue-700 px-4 text-sm font-semibold text-white"
