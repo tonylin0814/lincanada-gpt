@@ -23,7 +23,15 @@ export async function POST(request: Request) {
   const results = await Promise.all(
     files.map(async (file) => {
       const buffer = Buffer.from(await file.arrayBuffer());
-      return extractExifFromFile(buffer, file.name, file.type);
+      return extractExifFromFile(buffer, file.name, file.type).catch((error) => {
+        console.error(`Could not read image metadata for ${file.name}:`, error);
+        return {
+          filename: file.name,
+          photo_taken_at: null,
+          gps_lat: null,
+          gps_lng: null,
+        };
+      });
     }),
   );
 
