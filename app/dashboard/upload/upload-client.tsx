@@ -186,7 +186,7 @@ function matchDisplay(upload: UploadFile) {
   if (!upload.selected_record_r_number) {
     return {
       className: "font-medium text-red-600",
-      label: "Will create a new record",
+      label: "No match selected",
     };
   }
 
@@ -228,6 +228,9 @@ export function UploadClient({
 
   const hasFiles = uploads.length > 0;
   const readyCount = uploads.filter((upload) => upload.ocr && upload.exif).length;
+  const matchedReadyCount = uploads.filter(
+    (upload) => upload.ocr && upload.exif && upload.selected_record_r_number,
+  ).length;
   const activeReview = savedReviews[activeReviewIndex] ?? null;
   const accepted = useMemo(
     () => ".jpg,.jpeg,.png,.heic,.heif,.pdf,image/jpeg,image/png,image/heic,image/heif,application/pdf",
@@ -455,10 +458,19 @@ export function UploadClient({
 
       updateUpload(upload.id, { status: "Uploading" });
       const selectedRecord = upload.selected_record_r_number ?? "";
-      const matchAction = selectedRecord ? "link" : "create";
+
+      if (!selectedRecord) {
+        failedUploads.push({
+          ...upload,
+          status: "Error",
+          error: "Choose a matching record before uploading.",
+        });
+        continue;
+      }
+
       const formData = new FormData();
       formData.append("image_file", upload.file);
-      formData.append("match_action", matchAction);
+      formData.append("match_action", "link");
       formData.append("record_r_number", selectedRecord);
       formData.append(
         "entity_id",
@@ -582,7 +594,11 @@ export function UploadClient({
     setActiveReviewIndex((current) => current + 1);
   }
 
-  const canArchive = readyCount > 0 && hasGoogleFolder && hasGoogleConnection;
+  const canArchive =
+    readyCount > 0 &&
+    matchedReadyCount === readyCount &&
+    hasGoogleFolder &&
+    hasGoogleConnection;
 
   return (
     <div className="mt-8">
@@ -893,7 +909,6 @@ function UploadEditCard({
                       {candidate.grand_total ?? ""}
                     </option>
                   ))}
-                  <option value="">Create new record</option>
                 </select>
               </label>
             ) : null}
