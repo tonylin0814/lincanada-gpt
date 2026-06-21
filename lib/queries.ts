@@ -588,6 +588,16 @@ export async function updateInvoiceForReview(
     );
 
     for (const item of input.items) {
+      if (item.item_category?.trim()) {
+        await client.query(
+          `INSERT INTO item_categories (name)
+           SELECT $1
+           WHERE NOT EXISTS (
+             SELECT 1 FROM item_categories WHERE LOWER(name) = LOWER($1)
+           )`,
+          [item.item_category.trim()],
+        );
+      }
       await client.query(
         `UPDATE invoice_items
          SET item_name = $2,
@@ -610,6 +620,27 @@ export async function updateInvoiceForReview(
 
     await client.query("COMMIT");
     return invoiceResult.rows[0] ?? null;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  }
+}
+
+export async function deleteInvoice(client: Client, record_i_number: string) {
+  await client.query("BEGIN");
+  try {
+    await client.query(
+      "DELETE FROM invoice_items WHERE record_i_number = $1",
+      [record_i_number],
+    );
+    const result = await client.query<Invoice>(
+      `DELETE FROM invoices
+       WHERE record_i_number = $1
+       RETURNING *`,
+      [record_i_number],
+    );
+    await client.query("COMMIT");
+    return result.rows[0] ?? null;
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
