@@ -194,6 +194,7 @@ export function InvoiceRecordClient({
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const taxRows = useMemo(() => getTaxRows(invoice.taxes), [invoice.taxes]);
   const previewUrl = getDrivePreviewUrl(invoice.attachment_link);
   const invoiceDownloadUrl = getDriveDownloadUrl(invoice.attachment_link);
@@ -301,11 +302,6 @@ export function InvoiceRecordClient({
   }
 
   async function deleteRecord() {
-    const typed = window.prompt(
-      `Delete ${invoice.record_i_number}? This deletes the Google Drive file and the database record. Type DELETE to confirm.`,
-    );
-    if (typed !== "DELETE") return;
-
     setError("");
     setIsDeleting(true);
     const response = await fetch(
@@ -368,13 +364,47 @@ export function InvoiceRecordClient({
           <button
             className="h-10 rounded-md border border-red-600 px-4 text-sm font-semibold text-red-600 disabled:opacity-60"
             disabled={isDeleting}
-            onClick={deleteRecord}
+            onClick={() => setIsDeleteConfirmOpen(true)}
             type="button"
           >
             {isDeleting ? "Deleting..." : "Delete Record"}
           </button>
         </div>
       </div>
+
+      {isDeleteConfirmOpen ? (
+        <div
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 print:hidden"
+          role="dialog"
+        >
+          <div className="w-full max-w-md rounded-lg border border-foreground/10 bg-background p-6 shadow-xl">
+            <h2 className="text-lg font-semibold">Delete record?</h2>
+            <p className="mt-3 text-sm text-foreground/70">
+              This will delete {invoice.record_i_number} from Google Drive and
+              remove the database record.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                className="h-10 rounded-md border border-foreground/20 px-4 text-sm font-medium"
+                disabled={isDeleting}
+                onClick={() => setIsDeleteConfirmOpen(false)}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="h-10 rounded-md bg-red-700 px-4 text-sm font-semibold text-white disabled:bg-red-700/40"
+                disabled={isDeleting}
+                onClick={deleteRecord}
+                type="button"
+              >
+                {isDeleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
 
