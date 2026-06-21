@@ -7,7 +7,6 @@ type CategoryGroup = {
   id: string;
   label: string;
   categories: string[];
-  editable: boolean;
 };
 
 type CategoryTabsProps = {
@@ -53,7 +52,7 @@ export function CategoryTabs({ groups }: CategoryTabsProps) {
       </div>
       <CategoryTable
         categories={activeGroup.categories}
-        editable={activeGroup.editable}
+        categoryType={activeGroup.id}
         label={activeGroup.label}
         routerRefresh={() => router.refresh()}
       />
@@ -63,12 +62,12 @@ export function CategoryTabs({ groups }: CategoryTabsProps) {
 
 function CategoryTable({
   categories,
-  editable,
+  categoryType,
   label,
   routerRefresh,
 }: {
   categories: string[];
-  editable: boolean;
+  categoryType: string;
   label: string;
   routerRefresh: () => void;
 }) {
@@ -89,10 +88,14 @@ function CategoryTable({
 
     setError("");
     setIsSaving(true);
-    const response = await fetch("/api/categories/item/rename", {
+    const response = await fetch("/api/categories/rename", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ old_name: oldName, new_name: newName }),
+      body: JSON.stringify({
+        old_name: oldName,
+        new_name: newName,
+        type: categoryType,
+      }),
     });
     setIsSaving(false);
 
@@ -146,7 +149,7 @@ function CategoryTable({
                 )}
               </td>
               <td className="px-4 py-3">
-                {editing === category || !editable ? null : (
+                {editing === category ? null : (
                   <button
                     className="h-9 rounded-md border border-foreground/20 px-3 text-sm font-medium transition-colors hover:border-blue-700 hover:bg-blue-50 hover:text-blue-700"
                     onClick={() => setEditing(category)}
@@ -162,12 +165,6 @@ function CategoryTable({
       </table>
       {categories.length === 0 ? (
         <p className="p-4 text-sm text-foreground/60">No categories yet.</p>
-      ) : null}
-      {!editable ? (
-        <p className="border-t border-foreground/10 p-4 text-sm text-foreground/60">
-          Editing is available for item categories. Receipt and invoice category
-          editing can be added next.
-        </p>
       ) : null}
       {error ? <p className="p-4 text-sm text-red-600">{error}</p> : null}
     </div>

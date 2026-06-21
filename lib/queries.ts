@@ -310,9 +310,9 @@ export async function getReceiptCategories(client: Client) {
 
 export async function getReceiptItemCategories(client: Client) {
   const result = await client.query<{ category: string }>(
-    `SELECT name AS category FROM item_categories
-     UNION
-     SELECT DISTINCT item_category FROM receipt_items WHERE item_category IS NOT NULL
+    `SELECT DISTINCT item_category AS category
+     FROM receipt_items
+     WHERE item_category IS NOT NULL AND item_category <> ''
      ORDER BY category ASC`,
   );
 
@@ -321,9 +321,9 @@ export async function getReceiptItemCategories(client: Client) {
 
 export async function getInvoiceItemCategories(client: Client) {
   const result = await client.query<{ category: string }>(
-    `SELECT name AS category FROM item_categories
-     UNION
-     SELECT DISTINCT item_category FROM invoice_items WHERE item_category IS NOT NULL
+    `SELECT DISTINCT item_category AS category
+     FROM invoice_items
+     WHERE item_category IS NOT NULL AND item_category <> ''
      ORDER BY category ASC`,
   );
 
@@ -377,6 +377,65 @@ export async function renameItemCategory(
       "DELETE FROM item_categories WHERE name = $1",
       [from],
     );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  }
+}
+
+export type CategoryRenameType =
+  | "receipt-category"
+  | "receipt-item-category"
+  | "invoice-category"
+  | "invoice-item-category";
+
+export async function renameCategory(
+  client: Client,
+  type: CategoryRenameType,
+  oldName: string,
+  newName: string,
+) {
+  const from = oldName.trim();
+  const to = newName.trim();
+
+  if (!from || !to) {
+    throw new Error("Both category names are required.");
+  }
+
+  await client.query("BEGIN");
+  try {
+    if (type === "receipt-category") {
+      await client.query(
+        `INSERT INTO receipt_categories (name)
+         SELECT $1
+         WHERE NOT EXISTS (
+           SELECT 1 FROM receipt_categories WHERE LOWER(name) = LOWER($1)
+         )`,
+        [to],
+      );
+      await client.query("UPDATE receipts SET category = $2 WHERE category = $1", [
+        from,
+        to,
+      ]);
+      await client.query("DELETE FROM receipt_categories WHERE name = $1", [from]);
+    } else if (type === "receipt-item-category") {
+      await client.query(
+        "UPDATE receipt_items SET item_category = $2 WHERE item_category = $1",
+        [from, to],
+      );
+    } else if (type === "invoice-category") {
+      await client.query("UPDATE invoices SET category = $2 WHERE category = $1", [
+        from,
+        to,
+      ]);
+    } else {
+      await client.query(
+        "UPDATE invoice_items SET item_category = $2 WHERE item_category = $1",
+        [from, to],
+      );
+    }
+
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");

@@ -44,25 +44,21 @@ export default async function CategoriesPage() {
             groups={[
               {
                 categories: receiptCategories,
-                editable: false,
                 id: "receipt-category",
                 label: "Receipt Category",
               },
               {
                 categories: receiptItemCategories,
-                editable: true,
                 id: "receipt-item-category",
                 label: "Receipt Item Category",
               },
               {
                 categories: invoiceCategories,
-                editable: false,
                 id: "invoice-category",
                 label: "Invoice Category",
               },
               {
                 categories: invoiceItemCategories,
-                editable: true,
                 id: "invoice-item-category",
                 label: "Invoice Item Category",
               },
