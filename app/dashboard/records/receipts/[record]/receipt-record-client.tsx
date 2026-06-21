@@ -206,6 +206,7 @@ export function ReceiptRecordClient({
     useState(receiptCategories);
   const [localItemCategories, setLocalItemCategories] = useState(itemCategories);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -233,6 +234,8 @@ export function ReceiptRecordClient({
 
   function printRecord() {
     window.print();
+    setNotice("Print command sent.");
+    window.setTimeout(() => setNotice(""), 3500);
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -308,8 +311,8 @@ export function ReceiptRecordClient({
           <a
             className="inline-flex h-10 items-center rounded-md border border-foreground/20 px-4 text-sm font-medium"
             data-page-loading="false"
-            download
-            href={`/api/records/receipts/${encodeURIComponent(receipt.record_r_number)}/print`}
+            download={`${receipt.record_r_number}.pdf`}
+            href={`/api/records/receipts/${encodeURIComponent(receipt.record_r_number)}/download`}
           >
             Download Record
           </a>
@@ -376,6 +379,11 @@ export function ReceiptRecordClient({
       ) : null}
 
       {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
+      {notice ? (
+        <div className="mt-4 rounded-md border border-green-700/20 bg-green-50 px-4 py-3 text-sm font-medium text-green-800 print:hidden">
+          {notice}
+        </div>
+      ) : null}
 
       <div className="mt-6 grid gap-6 text-sm font-semibold sm:grid-cols-2">
         <div className="grid grid-cols-[160px_1fr] gap-4">

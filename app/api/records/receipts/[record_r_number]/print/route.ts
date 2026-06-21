@@ -7,6 +7,9 @@ import { getDriveFileId, getGoogleOAuthClient } from "@/lib/drive";
 import { getReceiptById, getReceiptItems } from "@/lib/queries";
 import type { Entity, JsonValue, Receipt, ReceiptItem } from "@/types/licanada_gpt";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 type RouteContext = { params: { record_r_number: string } };
 
 type WebAppGoogleUser = {
