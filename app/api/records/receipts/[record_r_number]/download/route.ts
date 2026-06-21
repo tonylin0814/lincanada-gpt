@@ -23,6 +23,13 @@ type TaxRow = {
   amount: string;
 };
 
+const chromiumPackUrls = {
+  arm64:
+    "https://github.com/Sparticuz/chromium/releases/download/v149.0.0/chromium-v149.0.0-pack.arm64.tar",
+  x64:
+    "https://github.com/Sparticuz/chromium/releases/download/v149.0.0/chromium-v149.0.0-pack.x64.tar",
+};
+
 function escapeHtml(value: unknown) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -81,7 +88,11 @@ async function getExecutablePath(chromium: typeof import("@sparticuz/chromium").
   }
 
   if (process.env.VERCEL || process.env.AWS_REGION) {
-    return chromium.executablePath();
+    const chromiumPackUrl =
+      process.env.CHROMIUM_PACK_URL ??
+      (process.arch === "arm64" ? chromiumPackUrls.arm64 : chromiumPackUrls.x64);
+
+    return chromium.executablePath(chromiumPackUrl);
   }
 
   const candidates = [
