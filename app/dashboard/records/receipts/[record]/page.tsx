@@ -11,31 +11,30 @@ type ReceiptDetailPageProps = {
   };
 };
 
-const receiptFields: Array<{
-  key: keyof Receipt;
+type ReceiptField = {
   label: string;
-}> = [
-  { key: "record_r_number", label: "Record Number" },
-  { key: "vendor", label: "Vendor" },
-  { key: "vendor_address", label: "Vendor Address" },
-  { key: "receipt_number", label: "Receipt Number" },
-  { key: "transaction_number", label: "Transaction Number" },
-  { key: "payment_method", label: "Payment Method" },
-  { key: "card_last_four", label: "Card Last 4 Digits" },
-  { key: "receipt_date", label: "Receipt Date" },
-  { key: "receipt_time", label: "Receipt Time" },
-  { key: "invoice_number", label: "Invoice Number" },
-  { key: "category", label: "Category" },
-  { key: "subtotal", label: "Sub-Total" },
-  { key: "taxes", label: "Tax" },
-  { key: "tips", label: "Tips" },
-  { key: "grand_total", label: "Total" },
-  { key: "currency", label: "Currency" },
-  { key: "created_at", label: "Record Date" },
-];
+  value: string;
+};
 
-function formatDateOnly(value: Date) {
-  return value.toISOString().slice(0, 10);
+function formatRecordDate(value: Date) {
+  return value.toISOString().slice(0, 19).replace("T", " ");
+}
+
+function formatReceiptDate(date: Date, time: string | null) {
+  const isoDate = date.toISOString().slice(0, 10);
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const utcDate = new Date(Date.UTC(year, month - 1, day));
+  const formattedDate = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  })
+    .format(utcDate)
+    .replace(",", "");
+
+  return time ? `${formattedDate} ${time}` : formattedDate;
 }
 
 function formatTaxValue(value: unknown) {
@@ -52,31 +51,61 @@ function formatTaxValue(value: unknown) {
       const entry = tax as Record<string, unknown>;
       const name = entry.name ?? entry.type ?? "Tax";
       const amount = entry.amount ?? "";
-      const number = entry.tax_number ? ` (${entry.tax_number})` : "";
 
-      return `${name}: ${amount}${number}`;
+      return `${name}: ${amount}`;
     })
     .join("\n");
 }
 
-function formatValue(key: keyof Receipt, value: unknown) {
+function formatValue(value: unknown) {
   if (value === null || value === undefined) {
     return "";
   }
 
-  if (key === "taxes") {
-    return formatTaxValue(value);
-  }
-
-  if (value instanceof Date) {
-    return key === "created_at" ? value.toISOString() : formatDateOnly(value);
-  }
-
-  if (typeof value === "object") {
-    return JSON.stringify(value, null, 2);
-  }
-
   return String(value);
+}
+
+function getDrivePreviewUrl(url: string | null) {
+  if (!url) return null;
+
+  const fileMatch = url.match(/\/file\/d\/([^/]+)/);
+  const openMatch = url.match(/[?&]id=([^&]+)/);
+  const id = fileMatch?.[1] ?? openMatch?.[1];
+
+  if (!id) {
+    return url;
+  }
+
+  return `https://drive.google.com/file/d/${id}/preview`;
+}
+
+function buildReceiptFields(receipt: Receipt): ReceiptField[][] {
+  return [
+    [
+      {
+        label: "Receipt Date",
+        value: formatReceiptDate(receipt.receipt_date, receipt.receipt_time),
+      },
+      { label: "Category", value: formatValue(receipt.category) },
+      { label: "Sub-Total", value: formatValue(receipt.subtotal) },
+      { label: "Tax", value: formatTaxValue(receipt.taxes) },
+      { label: "Tips", value: formatValue(receipt.tips) },
+      { label: "Total", value: formatValue(receipt.grand_total) },
+      { label: "Currency", value: formatValue(receipt.currency) },
+    ],
+    [
+      { label: "Vendor Address", value: formatValue(receipt.vendor_address) },
+      { label: "Receipt Number", value: formatValue(receipt.receipt_number) },
+      { label: "Invoice Number", value: formatValue(receipt.invoice_number) },
+      {
+        label: "Transaction Number",
+        value: formatValue(receipt.transaction_number),
+      },
+      { label: "Payment Method", value: formatValue(receipt.payment_method) },
+      { label: "Card Last 4 Digits", value: formatValue(receipt.card_last_four) },
+    ],
+    [{ label: "Record Date", value: formatRecordDate(receipt.created_at) }],
+  ];
 }
 
 export default async function ReceiptDetailPage({
@@ -100,27 +129,58 @@ export default async function ReceiptDetailPage({
       notFound();
     }
 
+    const previewUrl = getDrivePreviewUrl(receipt.attachment_link);
+    const receiptFieldGroups = buildReceiptFields(receipt);
+
     return (
       <main className="min-h-screen bg-background px-6 py-10 text-foreground">
-        <div className="mx-auto max-w-4xl">
+        <div className="mx-auto max-w-6xl">
           <Link className="text-sm underline" href="/dashboard/records">
             Back to records
           </Link>
-          <h1 className="mt-6 text-2xl font-semibold tracking-normal">
-            {receipt.record_r_number}
-          </h1>
-          <div className="mt-8 overflow-hidden border border-foreground/10">
-            {receiptFields.map(({ key, label }) => (
-              <div
-                className="grid gap-3 border-b border-foreground/10 p-4 text-sm last:border-b-0 sm:grid-cols-[220px_1fr]"
-                key={key}
-              >
-                <dt className="font-medium">{label}</dt>
-                <dd className="whitespace-pre-wrap break-words text-foreground/75">
-                  {formatValue(key, receipt[key])}
-                </dd>
-              </div>
-            ))}
+          <div className="mt-6 grid gap-6 text-sm font-semibold sm:grid-cols-2">
+            <div className="grid grid-cols-[160px_1fr] gap-4">
+              <span>Record Number</span>
+              <span className="text-foreground/75">{receipt.record_r_number}</span>
+            </div>
+            <div className="grid grid-cols-[120px_1fr] gap-4">
+              <span>Vendor</span>
+              <span className="text-foreground/75">{receipt.vendor}</span>
+            </div>
+          </div>
+
+          <div className="mt-12 grid gap-10 lg:grid-cols-[minmax(320px,510px)_1fr]">
+            <div className="flex min-h-[520px] items-center justify-center overflow-hidden border-2 border-cyan-700 bg-foreground/[0.02]">
+              {previewUrl ? (
+                <iframe
+                  className="h-[520px] w-full"
+                  src={previewUrl}
+                  title={`Receipt preview ${receipt.record_r_number}`}
+                />
+              ) : (
+                <span className="text-xl font-semibold uppercase tracking-wide text-cyan-700">
+                  Receipt Preview Area
+                </span>
+              )}
+            </div>
+
+            <div className="space-y-10">
+              {receiptFieldGroups.map((group, index) => (
+                <dl className="grid gap-y-2 text-base" key={index}>
+                  {group.map((field) => (
+                    <div
+                      className="grid gap-4 sm:grid-cols-[260px_1fr]"
+                      key={field.label}
+                    >
+                      <dt className="font-semibold">{field.label}</dt>
+                      <dd className="whitespace-pre-wrap break-words text-foreground/75">
+                        {field.value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              ))}
+            </div>
           </div>
         </div>
       </main>
