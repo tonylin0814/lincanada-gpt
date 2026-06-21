@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
 import { FormEvent, useMemo, useState } from "react";
 import type { Invoice, InvoiceItem } from "@/types/licanada_gpt";
@@ -115,7 +115,7 @@ function Field({
   children?: ReactNode;
 }) {
   return (
-    <label className="grid gap-2 text-sm sm:grid-cols-[190px_1fr] sm:items-center">
+    <div className="grid gap-2 text-sm sm:grid-cols-[190px_1fr] sm:items-center">
       <span className="font-semibold">{label}</span>
       {editMode ? (
         children ?? (
@@ -129,7 +129,7 @@ function Field({
       ) : (
         <span className="min-h-6 break-words text-foreground/75">{value}</span>
       )}
-    </label>
+    </div>
   );
 }
 
@@ -185,7 +185,9 @@ export function InvoiceRecordClient({
   itemCategories,
 }: InvoiceRecordClientProps) {
   const router = useRouter();
-  const [editMode, setEditMode] = useState(false);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [editMode, setEditMode] = useState(searchParams.get("edit") === "1");
   const [localInvoiceCategories, setLocalInvoiceCategories] =
     useState(invoiceCategories);
   const [localItemCategories, setLocalItemCategories] = useState(itemCategories);
@@ -284,7 +286,16 @@ export function InvoiceRecordClient({
     }
 
     setEditMode(false);
+    window.history.replaceState(null, "", pathname);
     router.refresh();
+  }
+
+  function enterEditMode() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("edit", "1");
+    const query = params.toString();
+    window.history.replaceState(null, "", `${pathname}${query ? `?${query}` : ""}`);
+    setEditMode(true);
   }
 
   async function deleteRecord() {
@@ -338,7 +349,7 @@ export function InvoiceRecordClient({
           {!editMode ? (
             <button
               className="h-10 rounded-md bg-blue-700 px-4 text-sm font-semibold text-white"
-              onClick={() => setEditMode(true)}
+              onClick={enterEditMode}
               type="button"
             >
               Edit
