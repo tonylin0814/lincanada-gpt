@@ -1,4 +1,10 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export { GET } from "../print/route";
+import { GET as downloadPdf } from "../print/route";
+
+type RouteContext = { params: { record_r_number: string } };
+
+export function GET(request: Request, context: RouteContext) {
+  return downloadPdf(request, context);
+}

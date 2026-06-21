@@ -380,13 +380,27 @@ export async function GET(_request: Request, { params }: RouteContext) {
       getDriveImageBuffer(session.user.id, receipt.attachment_link).catch(() => null),
     ]);
 
-    const pdf = await buildReceiptPdf({
-      receipt,
-      entity,
-      userName: session.user.name ?? session.user.email ?? "Personal",
-      image,
-      items,
-    });
+    let pdf: Buffer;
+    try {
+      pdf = await buildReceiptPdf({
+        receipt,
+        entity,
+        userName: session.user.name ?? session.user.email ?? "Personal",
+        image,
+        items,
+      });
+    } catch (error) {
+      console.error("Could not build receipt PDF:", error);
+      return NextResponse.json(
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : "Could not build receipt PDF.",
+        },
+        { status: 500 },
+      );
+    }
 
     return new NextResponse(new Uint8Array(pdf), {
       headers: {

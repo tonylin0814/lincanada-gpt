@@ -251,7 +251,12 @@ export function ReceiptRecordClient({
       const contentType = response.headers.get("content-type") ?? "";
 
       if (!response.ok || !contentType.includes("application/pdf")) {
-        const message = await response.text().catch(() => "");
+        const message = contentType.includes("application/json")
+          ? await response
+              .json()
+              .then((body: { error?: string }) => body.error ?? "")
+              .catch(() => "")
+          : await response.text().catch(() => "");
         setError(
           message
             ? `Could not download record PDF. ${message}`
