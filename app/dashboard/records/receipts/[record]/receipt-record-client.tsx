@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, MouseEvent, useMemo, useState } from "react";
 import type { Receipt, ReceiptItem } from "@/types/licanada_gpt";
 
 type ReceiptRecordClientProps = {
@@ -308,7 +308,9 @@ export function ReceiptRecordClient({
     router.refresh();
   }
 
-  function enterEditMode() {
+  function enterEditMode(event: MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
     const params = new URLSearchParams(searchParams.toString());
     params.set("edit", "1");
     const query = params.toString();
