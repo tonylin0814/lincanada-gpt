@@ -231,10 +231,6 @@ export function ReceiptRecordClient({
     printWindow.document.close();
   }
 
-  function printRecord() {
-    window.print();
-  }
-
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
@@ -298,13 +294,14 @@ export function ReceiptRecordClient({
           Back to records
         </button>
         <div className="flex flex-wrap gap-3">
-          <button
-            className="h-10 rounded-md border border-foreground/20 px-4 text-sm font-medium"
-            onClick={printRecord}
-            type="button"
+          <a
+            className="inline-flex h-10 items-center rounded-md border border-foreground/20 px-4 text-sm font-medium"
+            data-page-loading="false"
+            download
+            href={`/api/records/receipts/${encodeURIComponent(receipt.record_r_number)}/print`}
           >
             Print Record
-          </button>
+          </a>
           <a
             className="inline-flex h-10 items-center rounded-md border border-foreground/20 px-4 text-sm font-medium"
             data-page-loading="false"
