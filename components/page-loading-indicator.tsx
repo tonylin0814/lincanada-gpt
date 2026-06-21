@@ -6,6 +6,14 @@ import { useEffect, useRef, useState } from "react";
 const navigationStartEvent = "lin-system:navigation-start";
 
 function isInternalNavigationLink(link: HTMLAnchorElement) {
+  if (
+    link.hasAttribute("download") ||
+    link.dataset.pageLoading === "false" ||
+    link.pathname.startsWith("/api/")
+  ) {
+    return false;
+  }
+
   if (link.target && link.target !== "_self") {
     return false;
   }
@@ -77,6 +85,15 @@ export function PageLoadingIndicator() {
 
     return undefined;
   }, [pathname, searchParams]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(() => setIsLoading(false), 8000);
+    return () => window.clearTimeout(timeout);
+  }, [isLoading]);
 
   if (!isLoading) {
     return null;

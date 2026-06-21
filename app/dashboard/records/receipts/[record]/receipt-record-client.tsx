@@ -307,6 +307,8 @@ export function ReceiptRecordClient({
           </button>
           <a
             className="inline-flex h-10 items-center rounded-md border border-foreground/20 px-4 text-sm font-medium"
+            data-page-loading="false"
+            download
             href={`/api/records/receipts/${encodeURIComponent(receipt.record_r_number)}/export`}
           >
             Download Record
