@@ -7,6 +7,20 @@ import { ReceiptReviewForm } from "./receipt-review-form";
 
 type PageProps = { params: { record_r_number: string } };
 
+function getDrivePreviewUrl(url: string | null) {
+  if (!url) return null;
+
+  const fileMatch = url.match(/\/file\/d\/([^/]+)/);
+  const openMatch = url.match(/[?&]id=([^&]+)/);
+  const id = fileMatch?.[1] ?? openMatch?.[1];
+
+  if (!id) {
+    return url;
+  }
+
+  return `https://drive.google.com/file/d/${id}/preview`;
+}
+
 export default async function ReceiptReviewPage({ params }: PageProps) {
   const session = await getCurrentSession();
   if (!session?.user) redirect("/login");
@@ -19,6 +33,7 @@ export default async function ReceiptReviewPage({ params }: PageProps) {
       getReceiptItems(client, record),
     ]);
     if (!receipt) notFound();
+    const previewUrl = getDrivePreviewUrl(receipt.attachment_link);
 
     return (
       <main className="min-h-screen bg-background px-6 py-10 text-foreground">
@@ -31,12 +46,11 @@ export default async function ReceiptReviewPage({ params }: PageProps) {
           </h1>
           <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(320px,1fr)_minmax(0,1.4fr)]">
             <section className="border border-foreground/10 p-4">
-              {receipt.attachment_link ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  alt={`Receipt ${receipt.record_r_number}`}
-                  className="max-h-[720px] w-full object-contain"
-                  src={receipt.attachment_link}
+              {previewUrl ? (
+                <iframe
+                  className="h-[720px] w-full"
+                  src={previewUrl}
+                  title={`Receipt ${receipt.record_r_number}`}
                 />
               ) : (
                 <p className="text-sm text-foreground/60">No image yet</p>

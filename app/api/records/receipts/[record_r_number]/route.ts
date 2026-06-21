@@ -4,6 +4,7 @@ import { getUserDb } from "@/lib/db";
 import {
   getReceiptById,
   getReceiptItems,
+  deleteReceipt,
   markReceiptReviewed,
   updateReceiptForReview,
   type ReceiptUpdateInput,
@@ -64,6 +65,22 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       client,
       decodeURIComponent(params.record_r_number),
       body.review_notes || null,
+    );
+    if (!receipt) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ receipt });
+  } finally {
+    await client.end();
+  }
+}
+
+export async function DELETE(_request: Request, { params }: RouteContext) {
+  const client = await getAuthedClient();
+  if (!client) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  try {
+    const receipt = await deleteReceipt(
+      client,
+      decodeURIComponent(params.record_r_number),
     );
     if (!receipt) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json({ receipt });

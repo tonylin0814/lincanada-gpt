@@ -465,6 +465,17 @@ export async function updateReceiptForReview(
   }
 }
 
+export async function deleteReceipt(client: Client, record_r_number: string) {
+  const result = await client.query<Receipt>(
+    `DELETE FROM receipts
+     WHERE record_r_number = $1
+     RETURNING *`,
+    [record_r_number],
+  );
+
+  return result.rows[0] ?? null;
+}
+
 export async function updateInvoiceForReview(
   client: Client,
   record_i_number: string,

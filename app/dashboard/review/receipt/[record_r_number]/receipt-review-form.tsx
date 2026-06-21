@@ -4,6 +4,32 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import type { Receipt, ReceiptItem } from "@/types/licanada_gpt";
 
+function toDateInputValue(value: Date | string) {
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+
+  return value.slice(0, 10);
+}
+
+function getTaxRows(taxes: unknown) {
+  const rows = Array.isArray(taxes) ? taxes : [];
+
+  return [0, 1].map((index) => {
+    const tax = rows[index];
+
+    if (!tax || typeof tax !== "object") {
+      return { name: "", amount: "" };
+    }
+
+    const entry = tax as Record<string, unknown>;
+    return {
+      name: String(entry.name ?? entry.type ?? ""),
+      amount: String(entry.amount ?? ""),
+    };
+  });
+}
+
 export function ReceiptReviewForm({
   receipt,
   items,
@@ -15,15 +41,24 @@ export function ReceiptReviewForm({
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isReviewing, setIsReviewing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const taxRows = getTaxRows(receipt.taxes);
 
   function collect(form: HTMLFormElement) {
     const formData = new FormData(form);
+    const taxes = [0, 1]
+      .map((index) => ({
+        name: String(formData.get(`tax_name_${index}`) || "").trim(),
+        amount: String(formData.get(`tax_amount_${index}`) || "").trim(),
+      }))
+      .filter((tax) => tax.name || tax.amount);
+
     return {
       vendor: String(formData.get("vendor") ?? ""),
       receipt_date: String(formData.get("receipt_date") ?? ""),
       category: String(formData.get("category") ?? ""),
       subtotal: String(formData.get("subtotal") || "") || null,
-      taxes: JSON.parse(String(formData.get("taxes") || "[]")),
+      taxes,
       tips: String(formData.get("tips") || "") || null,
       grand_total: String(formData.get("grand_total") || "") || null,
       payment_method: String(formData.get("payment_method") || "") || null,
@@ -90,12 +125,48 @@ export function ReceiptReviewForm({
     router.refresh();
   }
 
+  async function deleteReceipt() {
+    setError("");
+    const typed = window.prompt(
+      `Delete receipt ${receipt.record_r_number}? This removes the database record and item rows. Type DELETE to confirm.`,
+    );
+
+    if (typed !== "DELETE") {
+      return;
+    }
+
+    setIsDeleting(true);
+    const response = await fetch(
+      `/api/records/receipts/${encodeURIComponent(receipt.record_r_number)}`,
+      { method: "DELETE" },
+    );
+    setIsDeleting(false);
+
+    if (!response.ok) {
+      setError("Could not delete receipt.");
+      return;
+    }
+
+    router.push("/dashboard/review");
+    router.refresh();
+  }
+
   return (
     <form className="space-y-6" onSubmit={save}>
+      <div className="flex justify-end">
+        <button
+          className="h-10 rounded-md border border-red-600 px-4 text-sm font-medium text-red-600 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={isDeleting}
+          onClick={deleteReceipt}
+          type="button"
+        >
+          {isDeleting ? "Deleting..." : "Delete Receipt"}
+        </button>
+      </div>
       <div className="grid gap-4 md:grid-cols-2">
         {[
           ["vendor", "Vendor", receipt.vendor],
-          ["receipt_date", "Date", String(receipt.receipt_date).slice(0, 10)],
+          ["receipt_date", "Date", toDateInputValue(receipt.receipt_date)],
           ["category", "Category", receipt.category],
           ["subtotal", "Subtotal", receipt.subtotal ?? ""],
           ["tips", "Tips", receipt.tips ?? ""],
@@ -123,14 +194,33 @@ export function ReceiptReviewForm({
             />
           </label>
         ))}
-        <label className="block text-sm md:col-span-2">
-          Taxes JSONB
-          <textarea
-            className="mt-2 min-h-24 w-full rounded-md border border-foreground/20 bg-background px-3 py-2 font-mono text-xs"
-            defaultValue={JSON.stringify(receipt.taxes, null, 2)}
-            name="taxes"
-          />
-        </label>
+        <fieldset className="md:col-span-2">
+          <legend className="text-sm font-medium">Taxes</legend>
+          <div className="mt-2 grid gap-3 md:grid-cols-2">
+            {taxRows.map((tax, index) => (
+              <div className="grid gap-3 sm:grid-cols-[1fr_1fr]" key={index}>
+                <label className="block text-sm">
+                  Tax name
+                  <input
+                    className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3"
+                    defaultValue={tax.name}
+                    name={`tax_name_${index}`}
+                    placeholder={index === 0 ? "HST" : "GST"}
+                  />
+                </label>
+                <label className="block text-sm">
+                  Amount
+                  <input
+                    className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3"
+                    defaultValue={tax.amount}
+                    name={`tax_amount_${index}`}
+                    placeholder="0.00"
+                  />
+                </label>
+              </div>
+            ))}
+          </div>
+        </fieldset>
         <label className="block text-sm md:col-span-2">
           Review notes
           <textarea
