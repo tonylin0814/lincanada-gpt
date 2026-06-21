@@ -518,7 +518,7 @@ async function buildReceiptPdf({
   return Buffer.from(await pdfDoc.save());
 }
 
-export async function GET(_request: Request, { params }: RouteContext) {
+export async function GET(request: Request, { params }: RouteContext) {
   const session = await getCurrentSession();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -562,10 +562,12 @@ export async function GET(_request: Request, { params }: RouteContext) {
       );
     }
 
+    const isDownload = new URL(request.url).pathname.endsWith("/download");
+
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         "Cache-Control": "no-store",
-        "Content-Disposition": `attachment; filename="${record}.pdf"`,
+        "Content-Disposition": `${isDownload ? "attachment" : "inline"}; filename="${record}.pdf"`,
         "Content-Type": "application/pdf",
       },
     });

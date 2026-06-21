@@ -234,8 +234,12 @@ export function ReceiptRecordClient({
   }
 
   function printRecord() {
-    window.print();
-    setNotice("Print command sent.");
+    window.open(
+      `/api/records/receipts/${encodeURIComponent(receipt.record_r_number)}/print`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+    setNotice("Record PDF opened for printing.");
     window.setTimeout(() => setNotice(""), 3500);
   }
 
