@@ -441,43 +441,6 @@ async function embedReceiptImage(pdfDoc: PDFDocument, image: Buffer | null) {
   }
 }
 
-function drawImagePage(
-  pdfDoc: PDFDocument,
-  image: PDFImage | null,
-  fonts: { regular: PDFFont; bold: PDFFont },
-) {
-  const page = pdfDoc.addPage([pageWidth, pageHeight]);
-  page.drawText("Receipt Image", {
-    x: pageMargin,
-    y: pageHeight - 56,
-    font: fonts.bold,
-    size: 16,
-  });
-
-  if (!image) {
-    page.drawText("Receipt image could not be embedded.", {
-      x: pageMargin,
-      y: pageHeight - 86,
-      font: fonts.regular,
-      size: 11,
-    });
-    return;
-  }
-
-  const maxWidth = pageWidth - pageMargin * 2;
-  const maxHeight = pageHeight - 112;
-  const scale = Math.min(maxWidth / image.width, maxHeight / image.height);
-  const width = image.width * scale;
-  const height = image.height * scale;
-
-  page.drawImage(image, {
-    x: pageMargin + (maxWidth - width) / 2,
-    y: pageMargin,
-    width,
-    height,
-  });
-}
-
 async function buildReceiptPdf({
   receipt,
   entity,
@@ -513,7 +476,6 @@ async function buildReceiptPdf({
 
   const itemPage = pdfDoc.addPage([pageWidth, pageHeight]);
   drawItemsTable(pdfDoc, itemPage, pageHeight - 56, items, receipt.currency, fonts);
-  drawImagePage(pdfDoc, embeddedImage, fonts);
 
   return Buffer.from(await pdfDoc.save());
 }
