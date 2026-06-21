@@ -2,7 +2,11 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth";
 import { getUserDb } from "@/lib/db";
-import { getInvoiceById, getInvoiceItems } from "@/lib/queries";
+import {
+  getInvoiceById,
+  getInvoiceItems,
+  getItemCategories,
+} from "@/lib/queries";
 import { InvoiceReviewForm } from "./invoice-review-form";
 
 type PageProps = { params: { record_i_number: string } };
@@ -14,9 +18,10 @@ export default async function InvoiceReviewPage({ params }: PageProps) {
   const record = decodeURIComponent(params.record_i_number);
   const client = await getUserDb(session.user.supabase_connection_string);
   try {
-    const [invoice, items] = await Promise.all([
+    const [invoice, items, itemCategories] = await Promise.all([
       getInvoiceById(client, record),
       getInvoiceItems(client, record),
+      getItemCategories(client),
     ]);
     if (!invoice) notFound();
 
@@ -43,7 +48,11 @@ export default async function InvoiceReviewPage({ params }: PageProps) {
               )}
             </section>
             <section>
-              <InvoiceReviewForm invoice={invoice} items={items} />
+              <InvoiceReviewForm
+                invoice={invoice}
+                itemCategories={itemCategories}
+                items={items}
+              />
             </section>
           </div>
         </div>

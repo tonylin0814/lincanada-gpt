@@ -2,7 +2,11 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth";
 import { getUserDb } from "@/lib/db";
-import { getReceiptById, getReceiptItems } from "@/lib/queries";
+import {
+  getItemCategories,
+  getReceiptById,
+  getReceiptItems,
+} from "@/lib/queries";
 import { ReceiptReviewForm } from "./receipt-review-form";
 
 type PageProps = { params: { record_r_number: string } };
@@ -28,9 +32,10 @@ export default async function ReceiptReviewPage({ params }: PageProps) {
   const record = decodeURIComponent(params.record_r_number);
   const client = await getUserDb(session.user.supabase_connection_string);
   try {
-    const [receipt, items] = await Promise.all([
+    const [receipt, items, itemCategories] = await Promise.all([
       getReceiptById(client, record),
       getReceiptItems(client, record),
+      getItemCategories(client),
     ]);
     if (!receipt) notFound();
     const previewUrl = getDrivePreviewUrl(receipt.attachment_link);
@@ -57,7 +62,11 @@ export default async function ReceiptReviewPage({ params }: PageProps) {
               )}
             </section>
             <section>
-              <ReceiptReviewForm items={items} receipt={receipt} />
+              <ReceiptReviewForm
+                itemCategories={itemCategories}
+                items={items}
+                receipt={receipt}
+              />
             </section>
           </div>
         </div>

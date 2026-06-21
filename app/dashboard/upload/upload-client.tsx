@@ -34,6 +34,7 @@ type UploadClientProps = {
   categories: string[];
   hasGoogleConnection: boolean;
   hasGoogleFolder: boolean;
+  itemCategories: string[];
 };
 
 const acceptedTypes = [
@@ -172,6 +173,7 @@ export function UploadClient({
   categories,
   hasGoogleConnection,
   hasGoogleFolder,
+  itemCategories,
 }: UploadClientProps) {
   const [uploads, setUploads] = useState<UploadFile[]>([]);
   const [savedReviews, setSavedReviews] = useState<SavedReview[]>([]);
@@ -618,6 +620,7 @@ export function UploadClient({
           categories={categories}
           isCanceling={isCancelingReview}
           isSaving={isSavingReview}
+          itemCategories={itemCategories}
           onCancel={cancelActiveReview}
           onSubmit={saveActiveReview}
           review={activeReview}
@@ -835,6 +838,7 @@ function UploadEditCard({
 function SavedReceiptReview({
   review,
   categories,
+  itemCategories,
   completed,
   total,
   reviewIndex,
@@ -845,6 +849,7 @@ function SavedReceiptReview({
 }: {
   review: SavedReview;
   categories: string[];
+  itemCategories: string[];
   completed: number;
   total: number;
   reviewIndex: number;
@@ -1001,13 +1006,34 @@ function SavedReceiptReview({
                 {review.items.length > 0 ? (
                   review.items.map((item) => (
                     <tr className="border-t border-foreground/10" key={item.id}>
+                      <td className="px-3 py-2">
+                        <input
+                          className="h-9 w-full rounded-md border border-foreground/20 bg-background px-2"
+                          defaultValue={item.item_name}
+                          name={`item_name_${item.id}`}
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          className="h-9 w-full rounded-md border border-foreground/20 bg-background px-2"
+                          defaultValue={item.adjusted_item_name ?? item.item_name}
+                          name={`adjusted_item_name_${item.id}`}
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <select
+                          className="h-9 w-full rounded-md border border-foreground/20 bg-background px-2"
+                          defaultValue={item.item_category}
+                          name={`item_category_${item.id}`}
+                        >
+                          {itemCategories.map((category) => (
+                            <option key={category} value={category}>
+                              {category}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
                       {[
-                        ["item_name", item.item_name],
-                        [
-                          "adjusted_item_name",
-                          item.adjusted_item_name ?? item.item_name,
-                        ],
-                        ["item_category", item.item_category],
                         ["item_qty", item.item_qty ?? ""],
                         ["item_price", item.item_price ?? ""],
                         ["item_total_price", item.item_total_price ?? ""],

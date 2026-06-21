@@ -7,9 +7,11 @@ import type { Invoice, InvoiceItem } from "@/types/licanada_gpt";
 export function InvoiceReviewForm({
   invoice,
   items,
+  itemCategories,
 }: {
   invoice: Invoice;
   items: InvoiceItem[];
+  itemCategories: string[];
 }) {
   const router = useRouter();
   const [error, setError] = useState("");
@@ -139,9 +141,28 @@ export function InvoiceReviewForm({
           <tbody>
             {items.map((item) => (
               <tr className="border-t border-foreground/10" key={item.id}>
+                <td className="px-3 py-2">
+                  <input
+                    className="h-9 w-full rounded-md border border-foreground/20 bg-background px-2"
+                    defaultValue={item.item_name}
+                    name={`item_name_${item.id}`}
+                  />
+                </td>
+                <td className="px-3 py-2">
+                  <select
+                    className="h-9 w-full rounded-md border border-foreground/20 bg-background px-2"
+                    defaultValue={item.item_category ?? ""}
+                    name={`item_category_${item.id}`}
+                  >
+                    <option value="">Uncategorized</option>
+                    {itemCategories.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                </td>
                 {[
-                  ["item_name", item.item_name],
-                  ["item_category", item.item_category ?? ""],
                   ["item_qty", item.item_qty ?? ""],
                   ["item_price", item.item_price ?? ""],
                   ["item_total_price", item.item_total_price ?? ""],

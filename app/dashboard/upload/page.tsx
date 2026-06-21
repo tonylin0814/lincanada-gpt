@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth";
 import { getUserDb, getWebAppDb } from "@/lib/db";
-import { getReceiptCategories } from "@/lib/queries";
+import { getItemCategories, getReceiptCategories } from "@/lib/queries";
 import { UploadClient } from "./upload-client";
 
 export default async function UploadPage() {
@@ -26,9 +26,13 @@ export default async function UploadPage() {
   );
   const userDb = await getUserDb(session.user.supabase_connection_string);
   let categories: string[] = [];
+  let itemCategories: string[] = [];
 
   try {
-    categories = await getReceiptCategories(userDb);
+    [categories, itemCategories] = await Promise.all([
+      getReceiptCategories(userDb),
+      getItemCategories(userDb),
+    ]);
   } finally {
     await userDb.end();
   }
@@ -46,6 +50,7 @@ export default async function UploadPage() {
           categories={categories}
           hasGoogleConnection={hasGoogleConnection}
           hasGoogleFolder={hasGoogleFolder}
+          itemCategories={itemCategories}
         />
       </div>
     </main>

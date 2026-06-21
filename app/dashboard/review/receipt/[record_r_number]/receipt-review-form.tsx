@@ -33,9 +33,11 @@ function getTaxRows(taxes: unknown) {
 export function ReceiptReviewForm({
   receipt,
   items,
+  itemCategories,
 }: {
   receipt: Receipt;
   items: ReceiptItem[];
+  itemCategories: string[];
 }) {
   const router = useRouter();
   const [error, setError] = useState("");
@@ -71,6 +73,9 @@ export function ReceiptReviewForm({
       items: items.map((item) => ({
         id: item.id,
         item_name: String(formData.get(`item_name_${item.id}`) ?? ""),
+        adjusted_item_name:
+          String(formData.get(`adjusted_item_name_${item.id}`) || "") ||
+          String(formData.get(`item_name_${item.id}`) ?? ""),
         item_category: String(formData.get(`item_category_${item.id}`) ?? ""),
         item_qty: String(formData.get(`item_qty_${item.id}`) || "") || null,
         item_price: String(formData.get(`item_price_${item.id}`) || "") || null,
@@ -236,6 +241,7 @@ export function ReceiptReviewForm({
           <thead className="bg-foreground/5">
             <tr>
               <th className="px-3 py-2">Item</th>
+              <th className="px-3 py-2">Adjusted Item</th>
               <th className="px-3 py-2">Category</th>
               <th className="px-3 py-2">Qty</th>
               <th className="px-3 py-2">Price</th>
@@ -245,9 +251,34 @@ export function ReceiptReviewForm({
           <tbody>
             {items.map((item) => (
               <tr className="border-t border-foreground/10" key={item.id}>
+                <td className="px-3 py-2">
+                  <input
+                    className="h-9 w-full rounded-md border border-foreground/20 bg-background px-2"
+                    defaultValue={item.item_name}
+                    name={`item_name_${item.id}`}
+                  />
+                </td>
+                <td className="px-3 py-2">
+                  <input
+                    className="h-9 w-full rounded-md border border-foreground/20 bg-background px-2"
+                    defaultValue={item.adjusted_item_name ?? item.item_name}
+                    name={`adjusted_item_name_${item.id}`}
+                  />
+                </td>
+                <td className="px-3 py-2">
+                  <select
+                    className="h-9 w-full rounded-md border border-foreground/20 bg-background px-2"
+                    defaultValue={item.item_category}
+                    name={`item_category_${item.id}`}
+                  >
+                    {itemCategories.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                </td>
                 {[
-                  ["item_name", item.item_name],
-                  ["item_category", item.item_category],
                   ["item_qty", item.item_qty ?? ""],
                   ["item_price", item.item_price ?? ""],
                   ["item_total_price", item.item_total_price ?? ""],
