@@ -64,7 +64,7 @@ export default async function RootLayout({
       >
         <PageLoadingIndicator />
         {session?.user ? (
-          <header className="border-b border-foreground/10 bg-background px-6 py-4 text-sm text-foreground">
+          <header className="border-b border-foreground/10 bg-background px-6 py-4 text-sm text-foreground print:hidden">
             <DashboardNavigation
               entities={entities}
               isAdmin={session.user.is_admin}
