@@ -1,9 +1,10 @@
 "use client";
 
-import { ChangeEvent, DragEvent, useMemo, useState } from "react";
+import { ChangeEvent, DragEvent, FormEvent, useMemo, useState } from "react";
 import type { ExtractedExif } from "@/lib/exif";
 import type { MatchResult } from "@/lib/matcher";
 import type { ReceiptOcrResult } from "@/lib/ocr";
+import type { Receipt, ReceiptItem } from "@/types/licanada_gpt";
 
 type UploadFile = {
   id: string;
@@ -14,14 +15,23 @@ type UploadFile = {
   match_result: MatchResult | null;
   status:
     | "Selected"
-    | "Extracting EXIF"
-    | "OCR and matching"
-    | "Ready to upload"
-    | "Archived"
+    | "Reading image"
+    | "Matching"
+    | "Ready"
+    | "Uploading"
     | "Error";
   error?: string;
   selected_record_r_number?: string;
-  archive_result?: string;
+};
+
+type SavedReview = {
+  receipt: Receipt;
+  items: ReceiptItem[];
+};
+
+type UploadClientProps = {
+  hasGoogleConnection: boolean;
+  hasGoogleFolder: boolean;
 };
 
 const acceptedTypes = [
@@ -31,6 +41,22 @@ const acceptedTypes = [
   "image/heif",
   "application/pdf",
 ];
+
+const emptyOcr: ReceiptOcrResult = {
+  vendor: null,
+  vendor_address: null,
+  store_number: null,
+  receipt_number: null,
+  transaction_number: null,
+  authorization_code: null,
+  receipt_date: null,
+  receipt_time: null,
+  subtotal: null,
+  taxes: [],
+  tips: null,
+  grand_total: null,
+  payment_method: null,
+};
 
 function canPreview(file: File) {
   return file.type === "image/jpeg" || file.type === "image/png";
@@ -48,30 +74,110 @@ function createUploadFiles(files: File[]) {
   }));
 }
 
-type UploadClientProps = {
-  hasGoogleConnection: boolean;
-  hasGoogleFolder: boolean;
-};
+function toNullableString(value: FormDataEntryValue | null) {
+  const stringValue = String(value || "").trim();
+  return stringValue || null;
+}
 
-type UploadSuccess = {
-  linked: number;
-  created: number;
-  records: string[];
-};
+function toNullableNumber(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const number = Number(trimmed);
+  return Number.isFinite(number) ? number : null;
+}
+
+function dateInputValue(value: Date | string | null) {
+  if (!value) return "";
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return value.slice(0, 10);
+}
+
+function getTaxRows(taxes: unknown) {
+  const rows = Array.isArray(taxes) ? taxes : [];
+
+  return [0, 1].map((index) => {
+    const tax = rows[index];
+    if (!tax || typeof tax !== "object") {
+      return { name: "", amount: "" };
+    }
+
+    const entry = tax as Record<string, unknown>;
+    return {
+      name: String(entry.name ?? entry.type ?? ""),
+      amount: String(entry.amount ?? ""),
+    };
+  });
+}
+
+function getDrivePreviewUrl(url: string | null) {
+  if (!url) return null;
+
+  const fileMatch = url.match(/\/file\/d\/([^/]+)/);
+  const openMatch = url.match(/[?&]id=([^&]+)/);
+  const id = fileMatch?.[1] ?? openMatch?.[1];
+
+  if (!id) return url;
+  return `https://drive.google.com/file/d/${id}/preview`;
+}
+
+function buildSavePayload(form: HTMLFormElement, review: SavedReview) {
+  const formData = new FormData(form);
+  const taxes = [0, 1]
+    .map((index) => ({
+      name: String(formData.get(`tax_name_${index}`) || "").trim(),
+      amount: String(formData.get(`tax_amount_${index}`) || "").trim(),
+    }))
+    .filter((tax) => tax.name || tax.amount);
+
+  return {
+    vendor: String(formData.get("vendor") ?? ""),
+    receipt_date: String(formData.get("receipt_date") ?? ""),
+    category: String(formData.get("category") ?? ""),
+    subtotal: toNullableString(formData.get("subtotal")),
+    taxes,
+    tips: toNullableString(formData.get("tips")),
+    grand_total: toNullableString(formData.get("grand_total")),
+    payment_method: toNullableString(formData.get("payment_method")),
+    receipt_number: toNullableString(formData.get("receipt_number")),
+    transaction_number: toNullableString(formData.get("transaction_number")),
+    authorization_code: toNullableString(formData.get("authorization_code")),
+    review_notes: toNullableString(formData.get("review_notes")),
+    items: review.items.map((item) => ({
+      id: item.id,
+      item_name: String(formData.get(`item_name_${item.id}`) ?? ""),
+      item_category: String(formData.get(`item_category_${item.id}`) ?? ""),
+      item_qty: toNullableString(formData.get(`item_qty_${item.id}`)),
+      item_price: toNullableString(formData.get(`item_price_${item.id}`)),
+      item_total_price: toNullableString(
+        formData.get(`item_total_price_${item.id}`),
+      ),
+    })),
+  };
+}
+
+function matchLabel(match: MatchResult | null) {
+  if (!match) return "Not matched yet";
+  if (match.match) return `Matched ${match.match.record_r_number} (${match.confidence}%)`;
+  if (match.candidates?.length) return "Pick a matching record";
+  return "Will create a new record";
+}
 
 export function UploadClient({
   hasGoogleConnection,
   hasGoogleFolder,
 }: UploadClientProps) {
   const [uploads, setUploads] = useState<UploadFile[]>([]);
+  const [savedReviews, setSavedReviews] = useState<SavedReview[]>([]);
+  const [activeReviewIndex, setActiveReviewIndex] = useState(0);
+  const [completedReviews, setCompletedReviews] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isConfirming, setIsConfirming] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [isSavingReview, setIsSavingReview] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState<UploadSuccess | null>(null);
 
   const hasFiles = uploads.length > 0;
-  const readyToUploadCount = uploads.filter((upload) => upload.match_result).length;
-
+  const readyCount = uploads.filter((upload) => upload.ocr && upload.exif).length;
+  const activeReview = savedReviews[activeReviewIndex] ?? null;
   const accepted = useMemo(
     () => ".jpg,.jpeg,.png,.heic,.heif,.pdf,image/jpeg,image/png,image/heic,image/heif,application/pdf",
     [],
@@ -94,12 +200,16 @@ export function UploadClient({
     }
 
     setError("");
+    setSavedReviews([]);
+    setCompletedReviews(0);
+    setActiveReviewIndex(0);
     setUploads((current) => [...current, ...createUploadFiles(files)]);
   }
 
   function handleInput(event: ChangeEvent<HTMLInputElement>) {
     if (event.target.files) {
       addFiles(event.target.files);
+      event.target.value = "";
     }
   }
 
@@ -108,16 +218,97 @@ export function UploadClient({
     addFiles(event.dataTransfer.files);
   }
 
+  function updateUpload(id: string, patch: Partial<UploadFile>) {
+    setUploads((current) =>
+      current.map((upload) =>
+        upload.id === id ? { ...upload, ...patch } : upload,
+      ),
+    );
+  }
+
+  async function rematchUpload(upload: UploadFile, nextOcr: ReceiptOcrResult) {
+    if (!upload.exif) return;
+
+    updateUpload(upload.id, { status: "Matching", ocr: nextOcr });
+    const response = await fetch("/api/upload/match", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ exif: upload.exif, ocr: nextOcr }),
+    });
+
+    if (!response.ok) {
+      updateUpload(upload.id, {
+        status: "Error",
+        error: "Could not match edited fields.",
+      });
+      return;
+    }
+
+    const body = (await response.json()) as { match_result: MatchResult };
+    updateUpload(upload.id, {
+      match_result: body.match_result,
+      selected_record_r_number:
+        body.match_result.match?.record_r_number ??
+        body.match_result.candidates?.[0]?.record_r_number,
+      status: "Ready",
+      error: undefined,
+    });
+  }
+
+  function updateOcrField(
+    upload: UploadFile,
+    field: keyof ReceiptOcrResult,
+    value: string,
+  ) {
+    const current = upload.ocr ?? emptyOcr;
+    const numericFields: Array<keyof ReceiptOcrResult> = [
+      "subtotal",
+      "tips",
+      "grand_total",
+    ];
+    const nextOcr = {
+      ...current,
+      [field]: numericFields.includes(field) ? toNullableNumber(value) : value || null,
+    } as ReceiptOcrResult;
+
+    rematchUpload(upload, nextOcr);
+  }
+
+  function updateOcrTax(
+    upload: UploadFile,
+    index: number,
+    field: "name" | "amount",
+    value: string,
+  ) {
+    const current = upload.ocr ?? emptyOcr;
+    const taxes = getTaxRows(current.taxes).map((tax) => ({
+      name: tax.name,
+      amount: toNullableNumber(tax.amount),
+    }));
+    taxes[index] = {
+      ...taxes[index],
+      [field]: field === "amount" ? toNullableNumber(value) : value,
+    };
+    const nextOcr = {
+      ...current,
+      taxes: taxes.filter((tax) => tax.name || tax.amount !== null),
+    };
+
+    rematchUpload(upload, nextOcr);
+  }
+
   async function processAll() {
     if (!hasFiles) return;
 
     setError("");
-    setSuccess(null);
+    setSavedReviews([]);
+    setActiveReviewIndex(0);
+    setCompletedReviews(0);
     setIsProcessing(true);
     setUploads((current) =>
       current.map((upload) => ({
         ...upload,
-        status: "Extracting EXIF",
+        status: "Reading image",
         error: undefined,
       })),
     );
@@ -131,10 +322,7 @@ export function UploadClient({
     });
 
     if (!response.ok) {
-      const body = (await response.json().catch(() => null)) as {
-        error?: string;
-      } | null;
-      setError(body?.error ?? "Could not extract EXIF data.");
+      setError("Could not read image metadata.");
       setUploads((current) =>
         current.map((upload) => ({ ...upload, status: "Error" })),
       );
@@ -152,18 +340,11 @@ export function UploadClient({
           gps_lng: null,
         };
 
-        setUploads((current) =>
-          current.map((currentUpload) =>
-            currentUpload.id === upload.id
-              ? { ...currentUpload, exif, status: "OCR and matching" }
-              : currentUpload,
-          ),
-        );
+        updateUpload(upload.id, { exif, status: "Matching" });
 
         const processForm = new FormData();
         processForm.append("file", upload.file);
         processForm.append("exif", JSON.stringify(exif));
-
         const processResponse = await fetch("/api/upload/process", {
           method: "POST",
           body: processForm,
@@ -177,14 +358,13 @@ export function UploadClient({
             ...upload,
             exif,
             status: "Error" as const,
-            error: processBody?.error ?? "Could not process receipt.",
+            error: processBody?.error ?? "Could not analyze receipt.",
           };
         }
 
         const processBody = (await processResponse.json()) as {
           ocr: ReceiptOcrResult;
           match_result: MatchResult;
-          suggested_action: string;
         };
 
         return {
@@ -195,7 +375,7 @@ export function UploadClient({
           selected_record_r_number:
             processBody.match_result.match?.record_r_number ??
             processBody.match_result.candidates?.[0]?.record_r_number,
-          status: "Ready to upload" as const,
+          status: "Ready" as const,
         };
       }),
     );
@@ -204,29 +384,21 @@ export function UploadClient({
     setIsProcessing(false);
   }
 
-  async function confirmAll() {
+  async function archiveAll() {
     setError("");
-    setSuccess(null);
-    setIsConfirming(true);
-    let linked = 0;
-    let created = 0;
-    const uploadedRecords: string[] = [];
-    const nextUploads: UploadFile[] = [];
+    setIsArchiving(true);
+    const reviews: SavedReview[] = [];
+    const failedUploads: UploadFile[] = [];
 
     for (const upload of uploads) {
       if (!upload.exif || !upload.ocr || !upload.match_result) {
-        nextUploads.push(upload);
+        failedUploads.push(upload);
         continue;
       }
 
-      const matchAction =
-        upload.match_result.match || upload.selected_record_r_number
-          ? "link"
-          : "create";
-      const selectedRecord =
-        upload.match_result.match?.record_r_number ??
-        upload.selected_record_r_number ??
-        "";
+      updateUpload(upload.id, { status: "Uploading" });
+      const selectedRecord = upload.selected_record_r_number ?? "";
+      const matchAction = selectedRecord ? "link" : "create";
       const formData = new FormData();
       formData.append("image_file", upload.file);
       formData.append("match_action", matchAction);
@@ -246,44 +418,67 @@ export function UploadClient({
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as {
           error?: string;
-          connect_url?: string;
         } | null;
-        nextUploads.push({
+        failedUploads.push({
           ...upload,
           status: "Error",
-          error:
-            body?.connect_url && body.error
-              ? `${body.error} Connect at ${body.connect_url}`
-              : body?.error ?? "Archive failed.",
+          error: body?.error ?? "Could not upload receipt.",
         });
         continue;
       }
 
-      const body = (await response.json()) as {
+      const archiveBody = (await response.json()) as {
         record_r_number: string;
-        action: "link" | "create";
-        attachment_link: string;
       };
-      if (body.action === "link") linked += 1;
-      if (body.action === "create") created += 1;
-      uploadedRecords.push(body.record_r_number);
-      if (upload.preview_url) {
-        URL.revokeObjectURL(upload.preview_url);
+      const detail = await fetch(
+        `/api/records/receipts/${encodeURIComponent(
+          archiveBody.record_r_number,
+        )}`,
+      );
+
+      if (detail.ok) {
+        const detailBody = (await detail.json()) as SavedReview;
+        reviews.push(detailBody);
       }
+
+      if (upload.preview_url) URL.revokeObjectURL(upload.preview_url);
     }
 
-    setUploads(nextUploads);
-    if (uploadedRecords.length > 0) {
-      setSuccess({
-        linked,
-        created,
-        records: uploadedRecords,
-      });
-    }
-    setIsConfirming(false);
+    setUploads(failedUploads);
+    setSavedReviews(reviews);
+    setActiveReviewIndex(0);
+    setCompletedReviews(0);
+    setIsArchiving(false);
   }
 
-  const canConfirm = uploads.some((upload) => upload.match_result);
+  async function saveActiveReview(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeReview) return;
+
+    setError("");
+    setIsSavingReview(true);
+    const response = await fetch(
+      `/api/records/receipts/${encodeURIComponent(
+        activeReview.receipt.record_r_number,
+      )}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildSavePayload(event.currentTarget, activeReview)),
+      },
+    );
+
+    setIsSavingReview(false);
+    if (!response.ok) {
+      setError("Could not save receipt changes.");
+      return;
+    }
+
+    setCompletedReviews((current) => current + 1);
+    setActiveReviewIndex((current) => current + 1);
+  }
+
+  const canArchive = readyCount > 0 && hasGoogleFolder && hasGoogleConnection;
 
   return (
     <div className="mt-8">
@@ -293,7 +488,7 @@ export function UploadClient({
           <p className="mt-1 text-foreground/65">
             {hasGoogleFolder
               ? hasGoogleConnection
-                ? "Connected and ready to archive uploads."
+                ? "Connected and ready."
                 : "Folder is set, but Google Drive is not connected yet."
               : "A Google Drive folder ID is required before archiving."}
           </p>
@@ -307,194 +502,430 @@ export function UploadClient({
           </a>
         ) : null}
       </div>
-      <label
-        className="flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-foreground/30 px-6 py-10 text-center transition-colors hover:bg-foreground/5"
-        onDragOver={(event) => event.preventDefault()}
-        onDrop={handleDrop}
-      >
-        <span className="text-lg font-medium">Drop receipts here</span>
-        <span className="mt-2 text-sm text-foreground/60">
-          or click to select JPG, PNG, HEIC, or PDF files
-        </span>
-        <input
-          accept={accepted}
-          className="sr-only"
-          multiple
-          onChange={handleInput}
-          type="file"
-        />
-      </label>
 
-      {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
-      {success ? (
-        <div className="mt-4 border border-green-700 bg-green-50 px-4 py-3 text-sm text-green-950">
+      {!activeReview ? (
+        <>
+          <label
+            className="flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-foreground/30 px-6 py-10 text-center transition-colors hover:bg-foreground/5"
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={handleDrop}
+          >
+            <span className="text-lg font-medium">Drop receipts here</span>
+            <span className="mt-2 text-sm text-foreground/60">
+              or click to select JPG, PNG, HEIC, or PDF files
+            </span>
+            <input
+              accept={accepted}
+              className="sr-only"
+              multiple
+              onChange={handleInput}
+              type="file"
+            />
+          </label>
+
+          {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
+
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
+            <p className="text-sm text-foreground/65">
+              {uploads.length} file{uploads.length === 1 ? "" : "s"} selected
+              {readyCount > 0 ? `, ${readyCount} ready` : ""}
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <button
+                className="h-12 min-w-36 rounded-md bg-blue-700 px-5 text-sm font-semibold uppercase tracking-wide text-white shadow-sm transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-700/40"
+                disabled={!hasFiles || isProcessing}
+                onClick={processAll}
+                type="button"
+              >
+                {isProcessing ? "Reading..." : "Upload"}
+              </button>
+              {readyCount > 0 ? (
+                <button
+                  className="h-12 min-w-44 rounded-md bg-green-700 px-5 text-sm font-semibold uppercase tracking-wide text-white shadow-sm transition-colors hover:bg-green-800 disabled:cursor-not-allowed disabled:bg-green-700/40"
+                  disabled={!canArchive || isArchiving}
+                  onClick={archiveAll}
+                  type="button"
+                >
+                  {isArchiving ? "Uploading..." : "Upload to Google Drive"}
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-5 lg:grid-cols-2">
+            {uploads.map((upload) => (
+              <UploadEditCard
+                key={upload.id}
+                onFieldBlur={updateOcrField}
+                onRecordChange={(value) =>
+                  updateUpload(upload.id, { selected_record_r_number: value })
+                }
+                onTaxBlur={updateOcrTax}
+                upload={upload}
+              />
+            ))}
+          </div>
+        </>
+      ) : (
+        <SavedReceiptReview
+          completed={completedReviews}
+          isSaving={isSavingReview}
+          onSubmit={saveActiveReview}
+          review={activeReview}
+          total={savedReviews.length}
+        />
+      )}
+
+      {!activeReview && savedReviews.length > 0 && completedReviews >= savedReviews.length ? (
+        <div className="mt-6 border border-green-700 bg-green-50 px-4 py-3 text-sm text-green-950">
           <p className="text-base font-semibold">Upload Success!</p>
           <p className="mt-1">
-            {success.linked} matched receipt{success.linked === 1 ? "" : "s"} uploaded,
-            {" "}
-            {success.created} new record{success.created === 1 ? "" : "s"} created.
+            {completedReviews}/{savedReviews.length} done. All uploaded receipts
+            were saved.
           </p>
-          {success.records.length > 0 ? (
-            <p className="mt-1">
-              Saved record{success.records.length === 1 ? "" : "s"}:{" "}
-              {success.records.join(", ")}
-            </p>
-          ) : null}
         </div>
       ) : null}
-
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
-        <p className="text-sm text-foreground/65">
-          {uploads.length} file{uploads.length === 1 ? "" : "s"} selected
-          {readyToUploadCount > 0 ? `, ${readyToUploadCount} ready` : ""}
-        </p>
-        <button
-          className="h-12 min-w-36 rounded-md bg-blue-700 px-5 text-sm font-semibold uppercase tracking-wide text-white shadow-sm transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-blue-700/40"
-          disabled={!hasFiles || isProcessing}
-          onClick={processAll}
-          type="button"
-        >
-          {isProcessing ? "Uploading..." : "Upload All"}
-        </button>
-        {canConfirm ? (
-          <button
-            className="h-12 min-w-36 rounded-md bg-green-700 px-5 text-sm font-semibold uppercase tracking-wide text-white shadow-sm transition-colors hover:bg-green-800 disabled:cursor-not-allowed disabled:bg-green-700/40"
-            disabled={isConfirming || !hasGoogleFolder}
-            onClick={confirmAll}
-            type="button"
-          >
-            {isConfirming ? "Uploading..." : "Upload Now"}
-          </button>
-        ) : null}
-      </div>
-
-      <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {uploads.map((upload) => (
-          <article
-            className="overflow-hidden rounded-md border border-foreground/10"
-            key={upload.id}
-          >
-            <div className="flex aspect-[4/3] items-center justify-center bg-foreground/5">
-              {upload.preview_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  alt={upload.file.name}
-                  className="h-full w-full object-contain"
-                  src={upload.preview_url}
-                />
-              ) : (
-                <span className="text-sm text-foreground/60">
-                  {upload.file.type === "application/pdf" ||
-                  upload.file.name.toLowerCase().endsWith(".pdf")
-                    ? "PDF"
-                    : "Preview unavailable"}
-                </span>
-              )}
-            </div>
-            <div className="space-y-3 p-4 text-sm">
-              <div>
-                <p className="font-medium">{upload.file.name}</p>
-                <p className="text-foreground/60">{upload.status}</p>
-                {upload.error ? (
-                  <p className="mt-1 text-red-600">
-                    {upload.error.includes("/api/auth/google") ? (
-                      <>
-                        Google Drive is not connected.{" "}
-                        <a className="underline" href="/api/auth/google">
-                          Connect Google Drive
-                        </a>
-                      </>
-                    ) : (
-                      upload.error
-                    )}
-                  </p>
-                ) : null}
-                {upload.archive_result ? (
-                  <p className="mt-1 text-foreground/70">
-                    {upload.archive_result}
-                  </p>
-                ) : null}
-              </div>
-              <dl className="grid grid-cols-[130px_1fr] gap-2">
-                <dt className="text-foreground/60">Original filename</dt>
-                <dd className="break-words">{upload.exif?.filename ?? upload.file.name}</dd>
-                <dt className="text-foreground/60">Date/time taken</dt>
-                <dd>{upload.exif?.photo_taken_at ?? ""}</dd>
-                <dt className="text-foreground/60">GPS latitude</dt>
-                <dd>{upload.exif?.gps_lat ?? ""}</dd>
-                <dt className="text-foreground/60">GPS longitude</dt>
-                <dd>{upload.exif?.gps_lng ?? ""}</dd>
-              </dl>
-              {upload.ocr ? (
-                <div className="border-t border-foreground/10 pt-3">
-                  <p className="font-medium">OCR</p>
-                  <dl className="mt-2 grid grid-cols-[130px_1fr] gap-2">
-                    <dt className="text-foreground/60">Vendor</dt>
-                    <dd>{upload.ocr.vendor ?? ""}</dd>
-                    <dt className="text-foreground/60">Date</dt>
-                    <dd>{upload.ocr.receipt_date ?? ""}</dd>
-                    <dt className="text-foreground/60">Total</dt>
-                    <dd>{upload.ocr.grand_total ?? ""}</dd>
-                    <dt className="text-foreground/60">Receipt #</dt>
-                    <dd>{upload.ocr.receipt_number ?? ""}</dd>
-                    <dt className="text-foreground/60">Transaction</dt>
-                    <dd>{upload.ocr.transaction_number ?? ""}</dd>
-                  </dl>
-                </div>
-              ) : null}
-              {upload.match_result ? (
-                <div className="border-t border-foreground/10 pt-3">
-                  <p className="font-medium">Match result</p>
-                  {upload.match_result.match ? (
-                    <p className="mt-2 text-sm">
-                      Matched: {upload.match_result.match.record_r_number} –{" "}
-                      {upload.match_result.match.vendor}{" "}
-                      {String(upload.match_result.match.receipt_date).slice(0, 10)}{" "}
-                      ${upload.match_result.match.grand_total ?? ""} (
-                      {upload.match_result.confidence}%)
-                    </p>
-                  ) : upload.match_result.candidates?.length ? (
-                    <label className="mt-2 block text-sm">
-                      Pick a candidate
-                      <select
-                        className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3"
-                        onChange={(event) =>
-                          setUploads((current) =>
-                            current.map((currentUpload) =>
-                              currentUpload.id === upload.id
-                                ? {
-                                    ...currentUpload,
-                                    selected_record_r_number: event.target.value,
-                                  }
-                                : currentUpload,
-                            ),
-                          )
-                        }
-                        value={upload.selected_record_r_number}
-                      >
-                        {upload.match_result.candidates.map((candidate) => (
-                          <option
-                            key={candidate.record_r_number}
-                            value={candidate.record_r_number}
-                          >
-                            {candidate.record_r_number} – {candidate.vendor} –{" "}
-                            {String(candidate.receipt_date).slice(0, 10)} – $
-                            {candidate.grand_total ?? ""}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : (
-                    <p className="mt-2 text-sm">
-                      No match — will create new record
-                    </p>
-                  )}
-                </div>
-              ) : null}
-            </div>
-          </article>
-        ))}
-      </div>
     </div>
+  );
+}
+
+function UploadEditCard({
+  upload,
+  onFieldBlur,
+  onTaxBlur,
+  onRecordChange,
+}: {
+  upload: UploadFile;
+  onFieldBlur: (
+    upload: UploadFile,
+    field: keyof ReceiptOcrResult,
+    value: string,
+  ) => void;
+  onTaxBlur: (
+    upload: UploadFile,
+    index: number,
+    field: "name" | "amount",
+    value: string,
+  ) => void;
+  onRecordChange: (value: string) => void;
+}) {
+  const ocr = upload.ocr;
+  const taxRows = getTaxRows(ocr?.taxes);
+  const matchOptions = [
+    ...(upload.match_result?.match ? [upload.match_result.match] : []),
+    ...(upload.match_result?.candidates ?? []),
+  ];
+
+  return (
+    <article className="overflow-hidden rounded-md border border-foreground/10">
+      <div className="grid gap-4 p-4 md:grid-cols-[180px_1fr]">
+        <div className="flex aspect-[4/3] items-center justify-center bg-foreground/5">
+          {upload.preview_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              alt={upload.file.name}
+              className="h-full w-full object-contain"
+              src={upload.preview_url}
+            />
+          ) : (
+            <span className="text-sm text-foreground/60">
+              {upload.file.name.toLowerCase().endsWith(".pdf")
+                ? "PDF"
+                : "Preview unavailable"}
+            </span>
+          )}
+        </div>
+
+        <div className="space-y-3 text-sm">
+          <div>
+            <p className="font-medium">{upload.file.name}</p>
+            <p className="text-foreground/60">{upload.status}</p>
+            {upload.error ? (
+              <p className="mt-1 text-red-600">{upload.error}</p>
+            ) : null}
+          </div>
+
+          {upload.exif ? (
+            <dl className="grid grid-cols-[130px_1fr] gap-2">
+              <dt className="text-foreground/60">Original filename</dt>
+              <dd className="break-words">{upload.exif.filename}</dd>
+              <dt className="text-foreground/60">Date/time taken</dt>
+              <dd>{upload.exif.photo_taken_at ?? ""}</dd>
+              <dt className="text-foreground/60">GPS latitude</dt>
+              <dd>{upload.exif.gps_lat ?? ""}</dd>
+              <dt className="text-foreground/60">GPS longitude</dt>
+              <dd>{upload.exif.gps_lng ?? ""}</dd>
+            </dl>
+          ) : null}
+        </div>
+      </div>
+
+      {ocr ? (
+        <div className="border-t border-foreground/10 p-4">
+          <p className="text-sm font-semibold">Edit OCR fields to rematch</p>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            {[
+              ["vendor", "Vendor", ocr.vendor ?? ""],
+              ["vendor_address", "Vendor Address", ocr.vendor_address ?? ""],
+              ["receipt_date", "Receipt Date", ocr.receipt_date ?? ""],
+              ["receipt_time", "Receipt Time", ocr.receipt_time ?? ""],
+              ["category", "Category", "Other"],
+              ["subtotal", "Sub-Total", ocr.subtotal ?? ""],
+              ["tips", "Tips", ocr.tips ?? ""],
+              ["grand_total", "Total", ocr.grand_total ?? ""],
+              ["payment_method", "Payment Method", ocr.payment_method ?? ""],
+              ["receipt_number", "Receipt Number", ocr.receipt_number ?? ""],
+              [
+                "transaction_number",
+                "Transaction Number",
+                ocr.transaction_number ?? "",
+              ],
+            ].map(([field, label, value]) => (
+              <label className="block text-sm" key={String(field)}>
+                {label}
+                <input
+                  className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3"
+                  defaultValue={String(value)}
+                  onBlur={(event) =>
+                    onFieldBlur(
+                      upload,
+                      field as keyof ReceiptOcrResult,
+                      event.currentTarget.value,
+                    )
+                  }
+                  type={field === "receipt_date" ? "date" : "text"}
+                />
+              </label>
+            ))}
+          </div>
+
+          <fieldset className="mt-4">
+            <legend className="text-sm font-medium">Taxes</legend>
+            <div className="mt-2 grid gap-3 md:grid-cols-2">
+              {taxRows.map((tax, index) => (
+                <div className="grid gap-3 sm:grid-cols-2" key={index}>
+                  <label className="block text-sm">
+                    Tax name
+                    <input
+                      className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3"
+                      defaultValue={tax.name}
+                      onBlur={(event) =>
+                        onTaxBlur(upload, index, "name", event.currentTarget.value)
+                      }
+                    />
+                  </label>
+                  <label className="block text-sm">
+                    Amount
+                    <input
+                      className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3"
+                      defaultValue={tax.amount}
+                      onBlur={(event) =>
+                        onTaxBlur(
+                          upload,
+                          index,
+                          "amount",
+                          event.currentTarget.value,
+                        )
+                      }
+                    />
+                  </label>
+                </div>
+              ))}
+            </div>
+          </fieldset>
+
+          <div className="mt-4 border-t border-foreground/10 pt-4 text-sm">
+            <p className="font-medium">{matchLabel(upload.match_result)}</p>
+            {matchOptions.length > 0 ? (
+              <label className="mt-2 block">
+                Force match
+                <select
+                  className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3"
+                  onChange={(event) => onRecordChange(event.currentTarget.value)}
+                  value={upload.selected_record_r_number ?? ""}
+                >
+                  {matchOptions.map((candidate) => (
+                    <option
+                      key={candidate.record_r_number}
+                      value={candidate.record_r_number}
+                    >
+                      {candidate.record_r_number} - {candidate.vendor} -{" "}
+                      {String(candidate.receipt_date).slice(0, 10)} - $
+                      {candidate.grand_total ?? ""}
+                    </option>
+                  ))}
+                  <option value="">Create new record</option>
+                </select>
+              </label>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function SavedReceiptReview({
+  review,
+  completed,
+  total,
+  isSaving,
+  onSubmit,
+}: {
+  review: SavedReview;
+  completed: number;
+  total: number;
+  isSaving: boolean;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const receipt = review.receipt;
+  const taxRows = getTaxRows(receipt.taxes);
+  const previewUrl = getDrivePreviewUrl(receipt.attachment_link);
+
+  return (
+    <form className="space-y-6" onSubmit={onSubmit}>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p className="text-sm text-foreground/60">
+            {completed + 1}/{total} done
+          </p>
+          <h2 className="text-xl font-semibold tracking-normal">
+            Review {receipt.record_r_number}
+          </h2>
+        </div>
+        <button
+          className="h-12 rounded-md bg-green-700 px-5 text-sm font-semibold uppercase tracking-wide text-white disabled:cursor-not-allowed disabled:bg-green-700/40"
+          disabled={isSaving}
+          type="submit"
+        >
+          {isSaving ? "Saving..." : "Save and Next"}
+        </button>
+      </div>
+
+      <div className="grid gap-8 lg:grid-cols-[minmax(320px,1fr)_minmax(0,1.35fr)]">
+        <section className="border border-foreground/10 p-4">
+          {previewUrl ? (
+            <iframe
+              className="h-[720px] w-full"
+              src={previewUrl}
+              title={`Receipt ${receipt.record_r_number}`}
+            />
+          ) : (
+            <p className="text-sm text-foreground/60">No image yet</p>
+          )}
+        </section>
+
+        <section className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-2">
+            {[
+              ["vendor", "Vendor", receipt.vendor],
+              ["receipt_date", "Date", dateInputValue(receipt.receipt_date)],
+              ["category", "Category", receipt.category],
+              ["subtotal", "Subtotal", receipt.subtotal ?? ""],
+              ["tips", "Tips", receipt.tips ?? ""],
+              ["grand_total", "Grand total", receipt.grand_total ?? ""],
+              ["payment_method", "Payment method", receipt.payment_method ?? ""],
+              ["receipt_number", "Receipt number", receipt.receipt_number ?? ""],
+              [
+                "transaction_number",
+                "Transaction number",
+                receipt.transaction_number ?? "",
+              ],
+              [
+                "authorization_code",
+                "Authorization code",
+                receipt.authorization_code ?? "",
+              ],
+            ].map(([name, label, value]) => (
+              <label className="block text-sm" key={String(name)}>
+                {label}
+                <input
+                  className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3"
+                  defaultValue={String(value)}
+                  name={String(name)}
+                  type={name === "receipt_date" ? "date" : "text"}
+                />
+              </label>
+            ))}
+            <fieldset className="md:col-span-2">
+              <legend className="text-sm font-medium">Taxes</legend>
+              <div className="mt-2 grid gap-3 md:grid-cols-2">
+                {taxRows.map((tax, index) => (
+                  <div className="grid gap-3 sm:grid-cols-2" key={index}>
+                    <label className="block text-sm">
+                      Tax name
+                      <input
+                        className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3"
+                        defaultValue={tax.name}
+                        name={`tax_name_${index}`}
+                      />
+                    </label>
+                    <label className="block text-sm">
+                      Amount
+                      <input
+                        className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3"
+                        defaultValue={tax.amount}
+                        name={`tax_amount_${index}`}
+                      />
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </fieldset>
+            <label className="block text-sm md:col-span-2">
+              Review notes
+              <textarea
+                className="mt-2 min-h-20 w-full rounded-md border border-foreground/20 bg-background px-3 py-2"
+                defaultValue={receipt.review_notes ?? ""}
+                name="review_notes"
+              />
+            </label>
+          </div>
+
+          <div className="overflow-x-auto border border-foreground/10">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead className="bg-foreground/5">
+                <tr>
+                  <th className="px-3 py-2">Item</th>
+                  <th className="px-3 py-2">Category</th>
+                  <th className="px-3 py-2">Qty</th>
+                  <th className="px-3 py-2">Price</th>
+                  <th className="px-3 py-2">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {review.items.length > 0 ? (
+                  review.items.map((item) => (
+                    <tr className="border-t border-foreground/10" key={item.id}>
+                      {[
+                        ["item_name", item.item_name],
+                        ["item_category", item.item_category],
+                        ["item_qty", item.item_qty ?? ""],
+                        ["item_price", item.item_price ?? ""],
+                        ["item_total_price", item.item_total_price ?? ""],
+                      ].map(([field, value]) => (
+                        <td className="px-3 py-2" key={field}>
+                          <input
+                            className="h-9 w-full rounded-md border border-foreground/20 bg-background px-2"
+                            defaultValue={String(value)}
+                            name={`${field}_${item.id}`}
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td className="px-3 py-4 text-foreground/60" colSpan={5}>
+                      No item rows extracted yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </form>
   );
 }
