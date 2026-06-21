@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import Link from "next/link";
+import {
+  DashboardNavigation,
+  type NavigationEntity,
+} from "@/components/dashboard-navigation";
 import { getCurrentSession } from "@/lib/auth";
 import { getUserDb } from "@/lib/db";
-import { getUnreviewedCount } from "@/lib/queries";
+import { getEntities, getUnreviewedCount } from "@/lib/queries";
 import "./globals.css";
 
 const geistSans = localFont({
@@ -29,6 +32,7 @@ export default async function RootLayout({
 }>) {
   const session = await getCurrentSession();
   let unreviewedCount = 0;
+  let entities: NavigationEntity[] = [];
 
   if (session?.user.supabase_connection_string) {
     const client = await getUserDb(session.user.supabase_connection_string).catch(
@@ -37,7 +41,16 @@ export default async function RootLayout({
 
     if (client) {
       try {
-        unreviewedCount = await getUnreviewedCount(client);
+        const [nextUnreviewedCount, nextEntities] = await Promise.all([
+          getUnreviewedCount(client),
+          getEntities(client),
+        ]);
+        unreviewedCount = nextUnreviewedCount;
+        entities = nextEntities.map((entity) => ({
+          id: entity.id,
+          name: entity.name,
+          type: entity.type,
+        }));
       } finally {
         await client.end();
       }
@@ -51,33 +64,11 @@ export default async function RootLayout({
       >
         {session?.user ? (
           <header className="border-b border-foreground/10 bg-background px-6 py-4 text-sm text-foreground">
-            <nav className="mx-auto flex max-w-6xl items-center gap-5">
-              <Link className="font-semibold" href="/dashboard">
-                Lincanada_GPT
-              </Link>
-              <Link className="text-foreground/75 hover:text-foreground" href="/dashboard/records">
-                Records
-              </Link>
-              <Link className="text-foreground/75 hover:text-foreground" href="/dashboard/upload">
-                Upload
-              </Link>
-              <Link className="text-foreground/75 hover:text-foreground" href="/dashboard/reports">
-                Reports
-              </Link>
-              <Link className="text-foreground/75 hover:text-foreground" href="/dashboard/review">
-                Review
-                {unreviewedCount > 0 ? (
-                  <span className="ml-2 rounded-full bg-foreground px-2 py-0.5 text-xs text-background">
-                    {unreviewedCount}
-                  </span>
-                ) : null}
-              </Link>
-              {session.user.is_admin ? (
-                <Link className="text-foreground/75 hover:text-foreground" href="/admin">
-                  Admin Panel
-                </Link>
-              ) : null}
-            </nav>
+            <DashboardNavigation
+              entities={entities}
+              isAdmin={session.user.is_admin}
+              unreviewedCount={unreviewedCount}
+            />
           </header>
         ) : null}
         {children}

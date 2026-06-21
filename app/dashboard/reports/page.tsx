@@ -55,6 +55,10 @@ function buildExportHref(
   return `/api/reports/export/${type}?${params.toString()}`;
 }
 
+function getReportType(searchParams: ReportsPageProps["searchParams"]) {
+  return getParam(searchParams, "type") === "revenue" ? "revenue" : "expense";
+}
+
 function money(value: number) {
   return new Intl.NumberFormat("en-CA", {
     style: "currency",
@@ -114,6 +118,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   if (!session?.user) redirect("/login");
 
   const filters = getFilters(searchParams);
+  const reportType = getReportType(searchParams);
   const client = await getUserDb(session.user.supabase_connection_string);
 
   try {
@@ -128,25 +133,28 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl font-semibold tracking-normal">
-                Reports
+                {reportType === "expense" ? "Expense Reports" : "Revenue Reports"}
               </h1>
               <p className="mt-2 text-sm text-foreground/65">
                 Monthly summaries and CSV exports.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Link
-                className="inline-flex h-10 items-center rounded-md border border-foreground/20 px-4 text-sm font-medium"
-                href={buildExportHref("receipts", filters)}
-              >
-                Export to CSV
-              </Link>
-              <Link
-                className="inline-flex h-10 items-center rounded-md border border-foreground/20 px-4 text-sm font-medium"
-                href={buildExportHref("invoices", filters)}
-              >
-                Export Invoices CSV
-              </Link>
+              {reportType === "expense" ? (
+                <Link
+                  className="inline-flex h-10 items-center rounded-md border border-foreground/20 px-4 text-sm font-medium"
+                  href={buildExportHref("receipts", filters)}
+                >
+                  Export Expense CSV
+                </Link>
+              ) : (
+                <Link
+                  className="inline-flex h-10 items-center rounded-md border border-foreground/20 px-4 text-sm font-medium"
+                  href={buildExportHref("invoices", filters)}
+                >
+                  Export Revenue CSV
+                </Link>
+              )}
             </div>
           </div>
 
@@ -154,6 +162,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
             action="/dashboard/reports"
             className="mt-8 grid gap-4 border border-foreground/10 p-4 md:grid-cols-4"
           >
+            <input name="type" type="hidden" value={reportType} />
             <label className="block text-sm">
               Entity
               <select
@@ -204,16 +213,19 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
             </div>
           </form>
 
-          <SummaryTable
-            label="Category"
-            rows={summary.expense_summary}
-            title="Expense Summary"
-          />
-          <SummaryTable
-            label="Buyer"
-            rows={summary.revenue_summary}
-            title="Revenue Summary"
-          />
+          {reportType === "expense" ? (
+            <SummaryTable
+              label="Category"
+              rows={summary.expense_summary}
+              title="Expense Summary"
+            />
+          ) : (
+            <SummaryTable
+              label="Buyer"
+              rows={summary.revenue_summary}
+              title="Revenue Summary"
+            />
+          )}
 
           <section className="mt-8 border border-foreground/10 p-5">
             <h2 className="text-lg font-semibold tracking-normal">

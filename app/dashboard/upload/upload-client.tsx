@@ -36,6 +36,7 @@ type UploadClientProps = {
   hasGoogleConnection: boolean;
   hasGoogleFolder: boolean;
   itemCategories: string[];
+  selectedEntityId: number;
 };
 
 const acceptedTypes = [
@@ -175,6 +176,7 @@ export function UploadClient({
   hasGoogleConnection,
   hasGoogleFolder,
   itemCategories,
+  selectedEntityId,
 }: UploadClientProps) {
   const router = useRouter();
   const [uploads, setUploads] = useState<UploadFile[]>([]);
@@ -417,7 +419,7 @@ export function UploadClient({
       formData.append("record_r_number", selectedRecord);
       formData.append(
         "entity_id",
-        String(upload.match_result.match?.entity_id ?? 1),
+        String(upload.match_result.match?.entity_id ?? selectedEntityId),
       );
       formData.append("exif", JSON.stringify(upload.exif));
       formData.append("ocr_data", JSON.stringify(upload.ocr));
@@ -491,7 +493,11 @@ export function UploadClient({
     }
 
     if (activeReviewIndex >= savedReviews.length - 1) {
-      router.push("/dashboard/records");
+      router.push(
+        `/dashboard/records?tab=receipts&entity_id=${encodeURIComponent(
+          selectedEntityId,
+        )}`,
+      );
       router.refresh();
       return;
     }
