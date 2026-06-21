@@ -162,33 +162,52 @@ function dateOnly(value: Date | string) {
   return String(value).slice(0, 10);
 }
 
+function reportDate(value: Date | string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return dateOnly(value);
+
+  return date.toLocaleDateString("en-US", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 export function receiptsToCsv(receipts: Receipt[]) {
+  const categories = Array.from(
+    new Set(
+      receipts
+        .map((receipt) => receipt.category?.trim())
+        .filter((category): category is string => Boolean(category)),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
+
   const rows = [
     [
       "Record #",
       "Date",
       "Vendor",
-      "Category",
+      ...categories,
       "Subtotal",
       "GST",
       "PST",
       "Tips",
       "Grand Total",
       "Payment Method",
-      "Reviewed",
     ],
     ...receipts.map((receipt) => [
       receipt.record_r_number,
-      dateOnly(receipt.receipt_date),
+      reportDate(receipt.receipt_date),
       receipt.vendor,
-      receipt.category,
+      ...categories.map((category) =>
+        receipt.category === category ? receipt.grand_total ?? "" : "",
+      ),
       receipt.subtotal ?? "",
       getTaxAmount(receipt.taxes, "GST"),
       getTaxAmount(receipt.taxes, "PST"),
       receipt.tips ?? "",
       receipt.grand_total ?? "",
       receipt.payment_method ?? "",
-      receipt.is_reviewed ? "Yes" : "No",
     ]),
   ];
 
