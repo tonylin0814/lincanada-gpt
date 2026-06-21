@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { startPageLoading } from "@/components/page-loading-indicator";
 
 type DashboardNavigationProps = {
   entities: NavigationEntity[];
@@ -174,6 +175,7 @@ export function DashboardNavigation({
     ) {
       const params = new URLSearchParams(searchParams.toString());
       params.set("entity_id", String(id));
+      startPageLoading();
       router.push(`${pathname}?${params.toString()}`);
     }
   }

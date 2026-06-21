@@ -4,6 +4,7 @@ import {
   DashboardNavigation,
   type NavigationEntity,
 } from "@/components/dashboard-navigation";
+import { PageLoadingIndicator } from "@/components/page-loading-indicator";
 import { getCurrentSession } from "@/lib/auth";
 import { getUserDb } from "@/lib/db";
 import { getEntities, getUnreviewedCount } from "@/lib/queries";
@@ -66,6 +67,7 @@ export default async function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <PageLoadingIndicator />
         {session?.user ? (
           <header className="border-b border-foreground/10 bg-background px-6 py-4 text-sm text-foreground">
             <DashboardNavigation

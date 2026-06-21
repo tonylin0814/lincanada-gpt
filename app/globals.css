@@ -24,4 +24,18 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+
+  .animate-page-loading {
+    animation: page-loading 1s ease-in-out infinite;
+  }
+}
+
+@keyframes page-loading {
+  0% {
+    transform: translateX(-110%);
+  }
+
+  100% {
+    transform: translateX(310%);
+  }
 }
