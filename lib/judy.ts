@@ -10,6 +10,19 @@ type JudyAnswer = {
   answer: string;
 };
 
+type LatestExpenseRow = {
+  record_r_number: string;
+  vendor: string;
+  receipt_date: string;
+  receipt_time: string | null;
+  category: string;
+  grand_total: string | number | null;
+  currency: string;
+  place_name: string | null;
+  place_address: string | null;
+  people_names: string | null;
+};
+
 const judyModel = process.env.OPENAI_JUDY_MODEL || "gpt-5.4-mini";
 const maxRows = 100;
 
@@ -510,6 +523,87 @@ async function runReadonlyQuery(client: Client, sql: string) {
   }
 }
 
+function wantsLatestExpense(message: string) {
+  return /\b(latest|last|most recent|recent)\b/i.test(message) &&
+    /\b(spending|expense|purchase|receipt|spent)\b/i.test(message);
+}
+
+function formatMoney(value: string | number | null, currency: string) {
+  if (value === null || value === undefined) {
+    return "amount not recorded";
+  }
+
+  const amount = Number(value);
+  if (Number.isNaN(amount)) {
+    return `${value} ${currency}`;
+  }
+
+  return `${amount.toFixed(2)} ${currency}`;
+}
+
+async function answerLatestExpense(client: Client): Promise<JudyAnswer> {
+  await client.query("BEGIN READ ONLY");
+  try {
+    await client.query("SET LOCAL statement_timeout = '5000ms'");
+    const result = await client.query<LatestExpenseRow>(
+      `
+        SELECT
+          r.record_r_number,
+          r.vendor,
+          r.receipt_date,
+          r.receipt_time,
+          r.category,
+          r.grand_total,
+          r.currency,
+          p.canonical_name AS place_name,
+          p.address AS place_address,
+          string_agg(DISTINCT pe.canonical_name, ', ') AS people_names
+        FROM receipts r
+        LEFT JOIN places p ON p.id = r.place_id
+        LEFT JOIN event_receipts er ON er.record_r_number = r.record_r_number
+        LEFT JOIN event_people ep ON ep.event_id = er.event_id
+        LEFT JOIN people pe ON pe.id = ep.person_id
+        GROUP BY
+          r.record_r_number,
+          r.vendor,
+          r.receipt_date,
+          r.receipt_time,
+          r.category,
+          r.grand_total,
+          r.currency,
+          p.canonical_name,
+          p.address,
+          r.created_at
+        ORDER BY r.receipt_date DESC, r.receipt_time DESC NULLS LAST, r.created_at DESC
+        LIMIT 1
+      `,
+    );
+    await client.query("COMMIT");
+
+    const latestExpense = result.rows[0];
+    if (!latestExpense) {
+      return { answer: "I do not see any spending records yet." };
+    }
+
+    const place = latestExpense.place_name
+      ? latestExpense.place_address
+        ? `${latestExpense.place_name}, ${latestExpense.place_address}`
+        : latestExpense.place_name
+      : latestExpense.vendor;
+    const people = latestExpense.people_names || "no linked person is recorded";
+
+    return {
+      answer: `Your latest spending record is ${formatMoney(
+        latestExpense.grand_total,
+        latestExpense.currency,
+      )} at ${latestExpense.vendor} on ${latestExpense.receipt_date}. Category: ${latestExpense.category}. Where: ${place}. With who: ${people}.`,
+    };
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  }
+}
+
 function toOpenAIMessages(messages: JudyMessage[]) {
   return messages.slice(-12).map((message) => ({
     role: message.role,
@@ -521,6 +615,14 @@ export async function askJudy(
   client: Client,
   messages: JudyMessage[],
 ): Promise<JudyAnswer> {
+  const latestUserMessage = [...messages]
+    .reverse()
+    .find((message) => message.role === "user");
+
+  if (latestUserMessage && wantsLatestExpense(latestUserMessage.text)) {
+    return answerLatestExpense(client);
+  }
+
   const openai = getOpenAI();
   const openAIMessages = [
     { role: "system" as const, content: judySystemPrompt },
