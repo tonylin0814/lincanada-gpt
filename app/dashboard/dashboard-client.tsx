@@ -161,8 +161,9 @@ function BloodPressureBlock({
       : "--";
 
   return (
-    <div>
-      <div className="grid gap-5 md:grid-cols-3">
+    <div className="rounded-md border-2 border-pink-500 p-4">
+      <h3 className="text-lg font-semibold tracking-normal">Blood Pressure</h3>
+      <div className="mt-4 grid gap-5 md:grid-cols-3">
         <section className="rounded-md border border-foreground/10 p-5">
           <h3 className="text-sm font-medium text-foreground/60">Latest</h3>
           <p className="mt-2 text-2xl font-semibold">{latest}</p>
