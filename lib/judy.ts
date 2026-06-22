@@ -283,6 +283,13 @@ const approvedFunctionNames = new Set([
 const bannedSqlPattern =
   /\b(insert|update|delete|upsert|merge|alter|drop|create|truncate|grant|revoke|call|do|copy|execute|prepare|notify|listen|unlisten|vacuum|analyze|set|reset|begin|commit|rollback|savepoint|release|lock)\b/i;
 
+const displayDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  month: "long",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
 const judySystemPrompt = `
 You are Judy, a warm, careful, read-only assistant for Lin System.
 
@@ -305,6 +312,13 @@ Absolute rules:
 - For "where" on an expense, use the receipt vendor and, when linked, the place name/address.
 - For "with who" on an expense, check whether the receipt is linked through event_receipts to an event, then through event_people to people. If no linked person exists, say "I do not see a linked person for that expense" instead of refusing.
 - If part of a question is answerable and part is not recorded, answer the available part and clearly say what is not recorded.
+- You must interpret records, not dump raw rows.
+- Never output raw timestamp strings, timezone text, JSON, arrays, object notation, or database-looking values.
+- Format dates naturally, for example "June 21, 2026".
+- Format money naturally, for example "$90.88 CAD".
+- For receipt item answers, summarize what the user bought or ate. Use clean bullets for item lists.
+- If item totals do not match the full receipt total, explain cautiously that the difference may be tax, tip, or other receipt charges when those details are not clear.
+- Do not repeat "your records show" unless it helps the sentence.
 
 Approved data areas:
 - people(id, canonical_name, relationship, notes, created_at)
@@ -327,6 +341,9 @@ When answering:
 - Use natural labels, not technical field names.
 - Be concise unless the user asks for detail.
 - Mention limits or uncertainty when relevant.
+- Think first about what the data means, then answer in plain language.
+- Prefer a short summary plus bullets over a field-by-field dump.
+- Hide implementation details and clean up raw values before responding.
 
 Examples:
 - User asks: "what is my last expense? where and with who?" Look up the latest receipt, left join its place if available, left join linked event people if available, then answer with date, vendor/place, amount, category, and linked person if one exists.
@@ -542,7 +559,16 @@ function wantsLatestExpense(message: string) {
     /\b(spending|expense|purchase|receipt|spent)\b/i.test(message);
 }
 
-function formatMoney(value: string | number | null, currency: string) {
+function formatDisplayDate(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return displayDateFormatter.format(date);
+}
+
+function formatDisplayMoney(value: string | number | null, currency: string) {
   if (value === null || value === undefined) {
     return "amount not recorded";
   }
@@ -552,7 +578,7 @@ function formatMoney(value: string | number | null, currency: string) {
     return `${value} ${currency}`;
   }
 
-  return `${amount.toFixed(2)} ${currency}`;
+  return `$${amount.toFixed(2)} ${currency}`;
 }
 
 async function answerLatestExpense(client: Client): Promise<JudyAnswer> {
@@ -604,13 +630,21 @@ async function answerLatestExpense(client: Client): Promise<JudyAnswer> {
         ? `${latestExpense.place_name}, ${latestExpense.place_address}`
         : latestExpense.place_name
       : latestExpense.vendor;
-    const people = latestExpense.people_names || "no linked person is recorded";
+    const people =
+      latestExpense.people_names || "I do not see anyone linked to that visit.";
 
     return {
-      answer: `Your latest spending record is ${formatMoney(
+      answer: `Your latest expense was at ${latestExpense.vendor} on ${formatDisplayDate(
+        latestExpense.receipt_date,
+      )}.
+
+You spent ${formatDisplayMoney(
         latestExpense.grand_total,
         latestExpense.currency,
-      )} at ${latestExpense.vendor} on ${latestExpense.receipt_date}. Category: ${latestExpense.category}. Where: ${place}. With who: ${people}.`,
+      )} in the ${latestExpense.category} category.
+
+Location: ${place}
+With: ${people}`,
     };
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
