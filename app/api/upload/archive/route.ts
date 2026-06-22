@@ -20,6 +20,11 @@ type EntityRow = {
   short_code: string;
 };
 
+type DuplicateReceipt = {
+  record_r_number: string;
+  reason: string;
+};
+
 function slugify(value: string) {
   return value
     .toLowerCase()
@@ -68,6 +73,147 @@ async function getReceipt(client: Awaited<ReturnType<typeof getUserDb>>, id: str
   );
 
   return result.rows[0] ?? null;
+}
+
+async function ensureArchiveColumns(client: Awaited<ReturnType<typeof getUserDb>>) {
+  await client.query(`
+    ALTER TABLE receipts
+      ADD COLUMN IF NOT EXISTS uploaded_file_size BIGINT,
+      ADD COLUMN IF NOT EXISTS uploaded_mime_type TEXT
+  `);
+}
+
+async function findDuplicateReceipt({
+  client,
+  exif,
+  file,
+  receipt,
+}: {
+  client: Awaited<ReturnType<typeof getUserDb>>;
+  exif: ExtractedExif;
+  file: File;
+  receipt: Receipt;
+}) {
+  if (receipt.attachment_link) {
+    return {
+      record_r_number: receipt.record_r_number,
+      reason: "This receipt record already has an uploaded file.",
+    };
+  }
+
+  const checks: Array<{
+    reason: string;
+    sql: string;
+    values: Array<string | number | null>;
+  }> = [];
+
+  if (exif.filename) {
+    checks.push({
+      reason: "Another uploaded receipt has the same original filename and file size.",
+      sql: `SELECT record_r_number, $4::text AS reason
+            FROM receipts
+            WHERE record_r_number <> $1
+              AND attachment_link IS NOT NULL
+              AND source_filename = $2
+              AND uploaded_file_size = $3
+            LIMIT 1`,
+      values: [receipt.record_r_number, exif.filename, file.size, ""],
+    });
+  }
+
+  if (receipt.transaction_number) {
+    checks.push({
+      reason: "Another uploaded receipt has the same transaction number.",
+      sql: `SELECT record_r_number, $4::text AS reason
+            FROM receipts
+            WHERE record_r_number <> $1
+              AND attachment_link IS NOT NULL
+              AND transaction_number = $2
+              AND receipt_date = $3::date
+            LIMIT 1`,
+      values: [
+        receipt.record_r_number,
+        receipt.transaction_number,
+        String(receipt.receipt_date).slice(0, 10),
+        "",
+      ],
+    });
+  }
+
+  if (receipt.authorization_code) {
+    checks.push({
+      reason: "Another uploaded receipt has the same authorization code.",
+      sql: `SELECT record_r_number, $4::text AS reason
+            FROM receipts
+            WHERE record_r_number <> $1
+              AND attachment_link IS NOT NULL
+              AND authorization_code = $2
+              AND receipt_date = $3::date
+            LIMIT 1`,
+      values: [
+        receipt.record_r_number,
+        receipt.authorization_code,
+        String(receipt.receipt_date).slice(0, 10),
+        "",
+      ],
+    });
+  }
+
+  if (receipt.receipt_number && receipt.vendor) {
+    checks.push({
+      reason: "Another uploaded receipt has the same vendor, date, and receipt number.",
+      sql: `SELECT record_r_number, $5::text AS reason
+            FROM receipts
+            WHERE record_r_number <> $1
+              AND attachment_link IS NOT NULL
+              AND receipt_number = $2
+              AND receipt_date = $3::date
+              AND vendor ILIKE $4
+            LIMIT 1`,
+      values: [
+        receipt.record_r_number,
+        receipt.receipt_number,
+        String(receipt.receipt_date).slice(0, 10),
+        `%${receipt.vendor}%`,
+        "",
+      ],
+    });
+  }
+
+  if (exif.photo_taken_at && exif.gps_lat && exif.gps_lng) {
+    checks.push({
+      reason: "Another uploaded receipt has the same photo time and GPS metadata.",
+      sql: `SELECT record_r_number, $5::text AS reason
+            FROM receipts
+            WHERE record_r_number <> $1
+              AND attachment_link IS NOT NULL
+              AND photo_taken_at = $2::timestamptz
+              AND photo_gps_lat = $3
+              AND photo_gps_lng = $4
+            LIMIT 1`,
+      values: [
+        receipt.record_r_number,
+        exif.photo_taken_at,
+        exif.gps_lat,
+        exif.gps_lng,
+        "",
+      ],
+    });
+  }
+
+  for (const check of checks) {
+    const result = await client.query<DuplicateReceipt>(check.sql, [
+      ...check.values.slice(0, -1),
+      check.reason,
+    ]);
+    const duplicate = result.rows[0];
+
+    if (duplicate) {
+      return duplicate;
+    }
+  }
+
+  return null;
 }
 
 function getMonthName(date: string | Date) {
@@ -128,6 +274,7 @@ export async function POST(request: Request) {
 
     const client = await getUserDb(session.user.supabase_connection_string);
     try {
+      await ensureArchiveColumns(client);
       const receipt = await getReceipt(client, recordNumber);
 
       if (!receipt) {
@@ -137,6 +284,23 @@ export async function POST(request: Request) {
       const entity = await getEntity(client, receipt.entity_id);
       if (!entity) {
         return NextResponse.json({ error: "Entity not found." }, { status: 404 });
+      }
+
+      const duplicate = await findDuplicateReceipt({
+        client,
+        exif,
+        file,
+        receipt,
+      });
+
+      if (duplicate) {
+        return NextResponse.json(
+          {
+            duplicate_record_r_number: duplicate.record_r_number,
+            error: `Duplicate upload blocked. ${duplicate.reason} (${duplicate.record_r_number})`,
+          },
+          { status: 409 },
+        );
       }
 
       const receiptDate = String(receipt.receipt_date).slice(0, 10);
@@ -162,7 +326,9 @@ export async function POST(request: Request) {
              source_filename = COALESCE(source_filename, $3),
              photo_taken_at = COALESCE(photo_taken_at, $4),
              photo_gps_lat = COALESCE(photo_gps_lat, $5),
-             photo_gps_lng = COALESCE(photo_gps_lng, $6)
+             photo_gps_lng = COALESCE(photo_gps_lng, $6),
+             uploaded_file_size = $7,
+             uploaded_mime_type = $8
          WHERE record_r_number = $1`,
         [
           receipt.record_r_number,
@@ -171,6 +337,8 @@ export async function POST(request: Request) {
           exif.photo_taken_at,
           exif.gps_lat,
           exif.gps_lng,
+          file.size,
+          getMimeType(file),
         ],
       );
 
