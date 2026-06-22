@@ -122,11 +122,10 @@ function SortHeader({
   const currentDir = getParam(searchParams, "sort_dir") === "asc" ? "asc" : "desc";
   const isActive = currentSort === sortKey;
   const nextDir = isActive && currentDir === "asc" ? "desc" : "asc";
-  const marker = isActive ? (currentDir === "asc" ? "ASC" : "DESC") : "Sort";
 
   return (
     <Link
-      className={`inline-flex items-center gap-1 rounded-md px-2 py-1 transition-colors hover:bg-blue-700 hover:text-white ${
+      className={`inline-flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-blue-700 hover:text-white ${
         isActive ? "bg-foreground text-background" : ""
       }`}
       href={buildHref(searchParams, {
@@ -134,9 +133,14 @@ function SortHeader({
         sort_by: sortKey,
         sort_dir: nextDir,
       })}
+      title={`Sort by ${label}`}
     >
       <span>{label}</span>
-      <span aria-hidden="true">{marker}</span>
+      {isActive ? (
+        <span className="text-[10px] font-semibold uppercase tracking-wide">
+          {currentDir}
+        </span>
+      ) : null}
     </Link>
   );
 }
