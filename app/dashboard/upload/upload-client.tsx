@@ -218,8 +218,8 @@ export function UploadClient({
   const router = useRouter();
   const [uploads, setUploads] = useState<UploadFile[]>([]);
   const [savedReviews, setSavedReviews] = useState<SavedReview[]>([]);
-  const [activeReviewIndex, setActiveReviewIndex] = useState(0);
   const [completedReviews, setCompletedReviews] = useState(0);
+  const [reviewTotal, setReviewTotal] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
   const [isSavingReview, setIsSavingReview] = useState(false);
@@ -232,7 +232,7 @@ export function UploadClient({
   const readyCount = uploads.filter(
     (upload) => upload.exif && upload.selected_record_r_number,
   ).length;
-  const activeReview = savedReviews[activeReviewIndex] ?? null;
+  const activeReview = savedReviews[0] ?? null;
   const accepted = useMemo(
     () => ".jpg,.jpeg,.png,.heic,.heif,.pdf,image/jpeg,image/png,image/heic,image/heif,application/pdf",
     [],
@@ -257,7 +257,7 @@ export function UploadClient({
     setError("");
     setSavedReviews([]);
     setCompletedReviews(0);
-    setActiveReviewIndex(0);
+    setReviewTotal(0);
     setUploads((current) => [...current, ...createUploadFiles(files)]);
   }
 
@@ -372,8 +372,8 @@ export function UploadClient({
 
     setError("");
     setSavedReviews([]);
-    setActiveReviewIndex(0);
     setCompletedReviews(0);
+    setReviewTotal(0);
     setIsProcessing(true);
     setUploads((current) =>
       current.map((upload) => ({
@@ -521,8 +521,8 @@ export function UploadClient({
 
     setUploads(failedUploads);
     setSavedReviews(reviews);
-    setActiveReviewIndex(0);
     setCompletedReviews(0);
+    setReviewTotal(reviews.length);
     setIsArchiving(false);
   }
 
@@ -549,7 +549,10 @@ export function UploadClient({
       return;
     }
 
-    if (activeReviewIndex >= savedReviews.length - 1) {
+    const remainingReviews = savedReviews.slice(1);
+    const nextCompleted = completedReviews + 1;
+
+    if (remainingReviews.length === 0) {
       router.push(
         `/dashboard/records?tab=receipts&entity_id=${encodeURIComponent(
           selectedEntityId,
@@ -559,8 +562,8 @@ export function UploadClient({
       return;
     }
 
-    setCompletedReviews((current) => current + 1);
-    setActiveReviewIndex((current) => current + 1);
+    setCompletedReviews(nextCompleted);
+    setSavedReviews(remainingReviews);
   }
 
   async function cancelActiveReview() {
@@ -585,7 +588,7 @@ export function UploadClient({
 
     setIsCancelConfirmOpen(false);
     setCompletedReviews((current) => current + 1);
-    setActiveReviewIndex((current) => current + 1);
+    setSavedReviews((current) => current.slice(1));
   }
 
   const canArchive =
@@ -698,8 +701,7 @@ export function UploadClient({
             onCancel={() => setIsCancelConfirmOpen(true)}
             onSubmit={saveActiveReview}
             review={activeReview}
-            reviewIndex={activeReviewIndex}
-            total={savedReviews.length}
+            total={reviewTotal}
           />
           {isCancelConfirmOpen ? (
             <div
@@ -738,11 +740,11 @@ export function UploadClient({
         </>
       )}
 
-      {!activeReview && savedReviews.length > 0 && completedReviews >= savedReviews.length ? (
+      {!activeReview && reviewTotal > 0 && completedReviews >= reviewTotal ? (
         <div className="mt-6 border border-green-700 bg-green-50 px-4 py-3 text-sm text-green-950">
           <p className="text-base font-semibold">Upload Success!</p>
           <p className="mt-1">
-            {completedReviews}/{savedReviews.length} done. All uploaded receipts
+            {completedReviews}/{reviewTotal} done. All uploaded receipts
             have been handled.
           </p>
         </div>
@@ -976,7 +978,6 @@ function SavedReceiptReview({
   itemCategories,
   completed,
   total,
-  reviewIndex,
   isSaving,
   isCanceling,
   onCancel,
@@ -987,7 +988,6 @@ function SavedReceiptReview({
   itemCategories: string[];
   completed: number;
   total: number;
-  reviewIndex: number;
   isSaving: boolean;
   isCanceling: boolean;
   onCancel: () => void;
@@ -996,7 +996,7 @@ function SavedReceiptReview({
   const receipt = review.receipt;
   const taxRows = getTaxRows(receipt.taxes);
   const previewUrl = getDrivePreviewUrl(receipt.attachment_link);
-  const isLast = reviewIndex >= total - 1;
+  const isLast = completed + 1 >= total;
 
   return (
     <form className="space-y-6" onSubmit={onSubmit}>
