@@ -271,50 +271,52 @@ export function DashboardClient({
           </label>
         </div>
 
-        <div className="mt-5 grid gap-5 lg:grid-cols-2">
-          <ExpenseBlock
-            entity={personalEntity}
-            summary={personalSummary}
-            title="Personal Expenses"
-            year={year}
-          />
-          <ExpenseBlock
-            entity={selectedCompany}
-            summary={companySummary}
-            title="Company Expenses"
-            year={year}
-          >
-            <label className="block max-w-sm">
-              <span className="text-sm font-medium">Company</span>
-              <select
-                className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3 text-sm outline-none transition-colors hover:border-foreground/45 focus:border-foreground"
-                disabled={companies.length === 0}
-                onChange={(event) => setSelectedCompanyId(event.target.value)}
-                value={selectedCompanyId}
-              >
-                {companies.length > 0 ? (
-                  companies.map((company) => (
-                    <option key={company.id} value={company.id}>
-                      {company.name}
-                    </option>
-                  ))
-                ) : (
-                  <option value="">No company found</option>
-                )}
-              </select>
-            </label>
-          </ExpenseBlock>
-        </div>
+        <div className="mt-5 rounded-md border-2 border-blue-600 p-4">
+          <div className="grid gap-5 lg:grid-cols-2">
+            <ExpenseBlock
+              entity={personalEntity}
+              summary={personalSummary}
+              title="Personal Expenses"
+              year={year}
+            />
+            <ExpenseBlock
+              entity={selectedCompany}
+              summary={companySummary}
+              title="Company Expenses"
+              year={year}
+            >
+              <label className="block max-w-sm">
+                <span className="text-sm font-medium">Company</span>
+                <select
+                  className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3 text-sm outline-none transition-colors hover:border-foreground/45 focus:border-foreground"
+                  disabled={companies.length === 0}
+                  onChange={(event) => setSelectedCompanyId(event.target.value)}
+                  value={selectedCompanyId}
+                >
+                  {companies.length > 0 ? (
+                    companies.map((company) => (
+                      <option key={company.id} value={company.id}>
+                        {company.name}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">No company found</option>
+                  )}
+                </select>
+              </label>
+            </ExpenseBlock>
+          </div>
 
-        <div className="mt-6 grid gap-5 lg:grid-cols-2">
-          <PendingBlock
-            count={personalPending.length}
-            title="Personal Expenses Upload Pending"
-          />
-          <PendingBlock
-            count={companyPending.length}
-            title="Company Expenses Upload Pending"
-          />
+          <div className="mt-6 grid gap-5 lg:grid-cols-2">
+            <PendingBlock
+              count={personalPending.length}
+              title="Personal Expenses Upload Pending"
+            />
+            <PendingBlock
+              count={companyPending.length}
+              title="Company Expenses Upload Pending"
+            />
+          </div>
         </div>
       </section>
 
