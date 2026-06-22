@@ -246,6 +246,7 @@ const approvedFunctionNames = new Set([
   "min",
   "now",
   "round",
+  "string_agg",
   "sum",
   "to_char",
   "trim",
@@ -273,6 +274,10 @@ Absolute rules:
 - Ask for only the minimum data needed.
 - For list answers, prefer LIMIT 50 or less.
 - For medical questions, summarize records only. Say: "I can summarize what your records show, but I cannot diagnose or recommend treatment. Please review this with a qualified health professional if you are concerned."
+- For "last expense", "latest expense", or "most recent expense", use receipts ordered by receipt_date descending, receipt_time descending when available, then created_at descending.
+- For "where" on an expense, use the receipt vendor and, when linked, the place name/address.
+- For "with who" on an expense, check whether the receipt is linked through event_receipts to an event, then through event_people to people. If no linked person exists, say "I do not see a linked person for that expense" instead of refusing.
+- If part of a question is answerable and part is not recorded, answer the available part and clearly say what is not recorded.
 
 Approved data areas:
 - people(id, canonical_name, relationship, notes, created_at)
@@ -295,6 +300,9 @@ When answering:
 - Use natural labels, not technical field names.
 - Be concise unless the user asks for detail.
 - Mention limits or uncertainty when relevant.
+
+Examples:
+- User asks: "what is my last expense? where and with who?" Look up the latest receipt, left join its place if available, left join linked event people if available, then answer with date, vendor/place, amount, category, and linked person if one exists.
 `.trim();
 
 const toolDefinition = {

@@ -13,7 +13,7 @@ const starterMessages: ChatMessage[] = [
   {
     id: 1,
     role: "assistant",
-    text: "Hi, I am Judy. I can help you read and understand your records once connected.",
+    text: "Hi, I am Judy. I can help you read and understand your records.",
   },
 ];
 
