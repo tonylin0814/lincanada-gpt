@@ -1,5 +1,6 @@
 import { compare } from "bcryptjs";
 import type { NextAuthOptions, Session } from "next-auth";
+import type { JWT } from "next-auth/jwt";
 import { getServerSession } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
@@ -74,6 +75,25 @@ async function getOrCreateGoogleUser(email: string, name?: string | null) {
   );
 
   return mapAuthUser(result.rows[0]);
+}
+
+async function refreshTokenFromUserEmail(token: JWT) {
+  if (!token.email) {
+    return token;
+  }
+
+  const appUser = await getActiveUserByEmail(token.email);
+
+  if (!appUser) {
+    return token;
+  }
+
+  token.id = Number(appUser.id);
+  token.supabase_connection_string = appUser.supabase_connection_string;
+  token.google_drive_folder_id = appUser.google_drive_folder_id;
+  token.is_admin = appUser.is_admin;
+
+  return token;
 }
 
 export const authOptions: NextAuthOptions = {
@@ -183,7 +203,7 @@ export const authOptions: NextAuthOptions = {
         }
       }
 
-      return token;
+      return refreshTokenFromUserEmail(token);
     },
     async session({ session, token }) {
       if (session.user) {
