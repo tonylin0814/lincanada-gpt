@@ -110,25 +110,6 @@ function CategoryTable({
 
   return (
     <div className="mt-5 overflow-hidden border border-foreground/10">
-      <div className="border-b border-foreground/10 p-4">
-        <p className="text-sm font-medium">Data Headers</p>
-        {categories.length > 0 ? (
-          <div className="mt-3 overflow-x-auto">
-            <div className="inline-grid min-w-full grid-flow-col auto-cols-max">
-              {categories.map((category) => (
-                <div
-                  className="border border-foreground/20 bg-foreground/5 px-4 py-2 text-sm font-semibold"
-                  key={category}
-                >
-                  {category}
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <p className="mt-2 text-sm text-foreground/60">No data headers yet.</p>
-        )}
-      </div>
       <table className="w-full min-w-[560px] border-collapse text-left text-sm">
         <thead className="bg-foreground/5">
           <tr>

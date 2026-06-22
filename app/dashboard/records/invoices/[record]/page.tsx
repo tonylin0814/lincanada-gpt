@@ -4,8 +4,8 @@ import { getUserDb } from "@/lib/db";
 import {
   getInvoiceById,
   getInvoiceCategories,
+  getInvoiceItemCategories,
   getInvoiceItems,
-  getItemCategories,
 } from "@/lib/queries";
 import type { Invoice, InvoiceItem } from "@/types/licanada_gpt";
 import { InvoiceRecordClient } from "./invoice-record-client";
@@ -38,7 +38,7 @@ export default async function InvoiceDetailPage({
         getInvoiceById(client, record),
         getInvoiceItems(client, record),
         getInvoiceCategories(client),
-        getItemCategories(client),
+        getInvoiceItemCategories(client),
       ]);
 
     if (!invoice) {

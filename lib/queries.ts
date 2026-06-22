@@ -297,46 +297,91 @@ export async function getEntities(client: Client) {
   return result.rows;
 }
 
+export async function ensureCategoryTables(client: Client) {
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS receipt_categories (
+      id BIGSERIAL PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS receipt_item_categories (
+      id BIGSERIAL PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS invoice_categories (
+      id BIGSERIAL PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS invoice_item_categories (
+      id BIGSERIAL PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    INSERT INTO receipt_categories (name)
+    SELECT DISTINCT category
+    FROM receipts
+    WHERE category IS NOT NULL AND category <> ''
+    ON CONFLICT DO NOTHING;
+
+    INSERT INTO receipt_item_categories (name)
+    SELECT DISTINCT item_category
+    FROM receipt_items
+    WHERE item_category IS NOT NULL AND item_category <> ''
+    ON CONFLICT DO NOTHING;
+
+    INSERT INTO invoice_categories (name)
+    SELECT DISTINCT category
+    FROM invoices
+    WHERE category IS NOT NULL AND category <> ''
+    ON CONFLICT DO NOTHING;
+
+    INSERT INTO invoice_item_categories (name)
+    SELECT DISTINCT item_category
+    FROM invoice_items
+    WHERE item_category IS NOT NULL AND item_category <> ''
+    ON CONFLICT DO NOTHING;
+  `);
+}
+
 export async function getReceiptCategories(client: Client) {
+  await ensureCategoryTables(client);
   const result = await client.query<{ category: string }>(
-    `SELECT name AS category FROM receipt_categories
-     UNION
-     SELECT DISTINCT category FROM receipts WHERE category IS NOT NULL
-     ORDER BY category ASC`,
+    "SELECT name AS category FROM receipt_categories ORDER BY name ASC",
   );
 
   return result.rows.map((row) => row.category);
 }
 
 export async function getReceiptItemCategories(client: Client) {
+  await ensureCategoryTables(client);
   const result = await client.query<{ category: string }>(
-    `SELECT DISTINCT item_category AS category
-     FROM receipt_items
-     WHERE item_category IS NOT NULL AND item_category <> ''
-     ORDER BY category ASC`,
+    "SELECT name AS category FROM receipt_item_categories ORDER BY name ASC",
   );
 
   return result.rows.map((row) => row.category);
 }
 
 export async function getInvoiceItemCategories(client: Client) {
+  await ensureCategoryTables(client);
   const result = await client.query<{ category: string }>(
-    `SELECT DISTINCT item_category AS category
-     FROM invoice_items
-     WHERE item_category IS NOT NULL AND item_category <> ''
-     ORDER BY category ASC`,
+    "SELECT name AS category FROM invoice_item_categories ORDER BY name ASC",
   );
 
   return result.rows.map((row) => row.category);
 }
 
 export async function getItemCategories(client: Client) {
+  await ensureCategoryTables(client);
   const result = await client.query<{ category: string }>(
-    `SELECT name AS category FROM item_categories
+    `SELECT name AS category FROM receipt_item_categories
      UNION
-     SELECT DISTINCT item_category FROM receipt_items WHERE item_category IS NOT NULL
-     UNION
-     SELECT DISTINCT item_category FROM invoice_items WHERE item_category IS NOT NULL
+     SELECT name AS category FROM invoice_item_categories
      ORDER BY category ASC`,
   );
 
@@ -403,6 +448,7 @@ export async function renameCategory(
     throw new Error("Both category names are required.");
   }
 
+  await ensureCategoryTables(client);
   await client.query("BEGIN");
   try {
     if (type === "receipt-category") {
@@ -421,19 +467,50 @@ export async function renameCategory(
       await client.query("DELETE FROM receipt_categories WHERE name = $1", [from]);
     } else if (type === "receipt-item-category") {
       await client.query(
+        `INSERT INTO receipt_item_categories (name)
+         SELECT $1
+         WHERE NOT EXISTS (
+           SELECT 1 FROM receipt_item_categories WHERE LOWER(name) = LOWER($1)
+         )`,
+        [to],
+      );
+      await client.query(
         "UPDATE receipt_items SET item_category = $2 WHERE item_category = $1",
         [from, to],
       );
+      await client.query("DELETE FROM receipt_item_categories WHERE name = $1", [
+        from,
+      ]);
     } else if (type === "invoice-category") {
+      await client.query(
+        `INSERT INTO invoice_categories (name)
+         SELECT $1
+         WHERE NOT EXISTS (
+           SELECT 1 FROM invoice_categories WHERE LOWER(name) = LOWER($1)
+         )`,
+        [to],
+      );
       await client.query("UPDATE invoices SET category = $2 WHERE category = $1", [
         from,
         to,
       ]);
+      await client.query("DELETE FROM invoice_categories WHERE name = $1", [from]);
     } else {
+      await client.query(
+        `INSERT INTO invoice_item_categories (name)
+         SELECT $1
+         WHERE NOT EXISTS (
+           SELECT 1 FROM invoice_item_categories WHERE LOWER(name) = LOWER($1)
+         )`,
+        [to],
+      );
       await client.query(
         "UPDATE invoice_items SET item_category = $2 WHERE item_category = $1",
         [from, to],
       );
+      await client.query("DELETE FROM invoice_item_categories WHERE name = $1", [
+        from,
+      ]);
     }
 
     await client.query("COMMIT");
@@ -444,11 +521,9 @@ export async function renameCategory(
 }
 
 export async function getInvoiceCategories(client: Client) {
+  await ensureCategoryTables(client);
   const result = await client.query<{ category: string }>(
-    `SELECT DISTINCT category
-     FROM invoices
-     WHERE category IS NOT NULL AND category <> ''
-     ORDER BY category ASC`,
+    "SELECT name AS category FROM invoice_categories ORDER BY name ASC",
   );
 
   return result.rows.map((row) => row.category);
@@ -542,6 +617,7 @@ export async function updateReceiptForReview(
   record_r_number: string,
   input: ReceiptUpdateInput,
 ) {
+  await ensureCategoryTables(client);
   await client.query("BEGIN");
   try {
     if (input.category.trim()) {
@@ -601,10 +677,10 @@ export async function updateReceiptForReview(
     for (const item of input.items) {
       if (item.item_category.trim()) {
         await client.query(
-          `INSERT INTO item_categories (name)
+          `INSERT INTO receipt_item_categories (name)
            SELECT $1
            WHERE NOT EXISTS (
-             SELECT 1 FROM item_categories WHERE LOWER(name) = LOWER($1)
+             SELECT 1 FROM receipt_item_categories WHERE LOWER(name) = LOWER($1)
            )`,
           [item.item_category.trim()],
         );
@@ -680,8 +756,20 @@ export async function updateInvoiceForReview(
   record_i_number: string,
   input: InvoiceUpdateInput,
 ) {
+  await ensureCategoryTables(client);
   await client.query("BEGIN");
   try {
+    if (input.category?.trim()) {
+      await client.query(
+        `INSERT INTO invoice_categories (name)
+         SELECT $1
+         WHERE NOT EXISTS (
+           SELECT 1 FROM invoice_categories WHERE LOWER(name) = LOWER($1)
+         )`,
+        [input.category.trim()],
+      );
+    }
+
     const invoiceResult = await client.query<Invoice>(
       `UPDATE invoices
        SET buyer_name = $2,
@@ -712,10 +800,10 @@ export async function updateInvoiceForReview(
     for (const item of input.items) {
       if (item.item_category?.trim()) {
         await client.query(
-          `INSERT INTO item_categories (name)
+          `INSERT INTO invoice_item_categories (name)
            SELECT $1
            WHERE NOT EXISTS (
-             SELECT 1 FROM item_categories WHERE LOWER(name) = LOWER($1)
+             SELECT 1 FROM invoice_item_categories WHERE LOWER(name) = LOWER($1)
            )`,
           [item.item_category.trim()],
         );

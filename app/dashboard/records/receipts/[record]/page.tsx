@@ -2,9 +2,9 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth";
 import { getUserDb } from "@/lib/db";
 import {
-  getItemCategories,
   getReceiptById,
   getReceiptCategories,
+  getReceiptItemCategories,
   getReceiptItems,
 } from "@/lib/queries";
 import type { Receipt, ReceiptItem } from "@/types/licanada_gpt";
@@ -38,7 +38,7 @@ export default async function ReceiptDetailPage({
         getReceiptById(client, record),
         getReceiptItems(client, record),
         getReceiptCategories(client),
-        getItemCategories(client),
+        getReceiptItemCategories(client),
       ]);
 
     if (!receipt) {

@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth";
 import { getUserDb, getWebAppDb } from "@/lib/db";
-import { getItemCategories, getReceiptCategories } from "@/lib/queries";
+import {
+  getReceiptCategories,
+  getReceiptItemCategories,
+} from "@/lib/queries";
 import { UploadClient } from "./upload-client";
 
 type UploadPageProps = {
@@ -59,7 +62,7 @@ export default async function UploadPage({ searchParams }: UploadPageProps) {
   try {
     [categories, itemCategories] = await Promise.all([
       getReceiptCategories(userDb),
-      getItemCategories(userDb),
+      getReceiptItemCategories(userDb),
     ]);
   } finally {
     await userDb.end();
