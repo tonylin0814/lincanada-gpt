@@ -206,6 +206,27 @@ function FinanceMenu({
   );
 }
 
+function FinanceSettingMenu() {
+  return (
+    <div className="group relative">
+      <button
+        className="h-9 rounded-md px-2 text-foreground/75 group-hover:bg-foreground/5 group-hover:text-foreground hover:bg-foreground/5 hover:text-foreground"
+        type="button"
+      >
+        Finance Setting
+      </button>
+      <div className="invisible absolute left-0 top-full z-50 w-64 rounded-md border border-foreground/10 bg-background p-3 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
+        <Link className={menuItemClass} href="/dashboard/categories">
+          Categories
+        </Link>
+        <Link className={menuItemClass} href="/dashboard/custom-reports">
+          Custom Reports
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 function HealthMenu({
   showBloodPressure,
   showWeight,
@@ -347,14 +368,12 @@ export function DashboardNavigation({
           showPersonalRevenue={hasFeature("personal_revenue")}
         />
       ) : null}
+      {showFinance ? <FinanceSettingMenu /> : null}
       <HealthMenu
         showBloodPressure={hasFeature("blood_pressure")}
         showWeight={hasFeature("weight")}
       />
       <DiaryMenu showReminder={hasFeature("reminder")} />
-      <Link className="text-foreground/75 hover:text-foreground" href="/dashboard/categories">
-        Categories
-      </Link>
       <Link className="text-foreground/75 hover:text-foreground" href="/dashboard/settings">
         Settings
       </Link>
