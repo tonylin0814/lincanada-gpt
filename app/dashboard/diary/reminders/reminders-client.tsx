@@ -5,8 +5,12 @@ import { useRouter } from "next/navigation";
 
 type ReminderItem = {
   id: number;
+  is_recurring: boolean;
+  recurrence_pattern: string | null;
   reminder_text: string;
+  trigger_day: number | null;
   trigger_date: string | null;
+  trigger_month: number | null;
 };
 
 type RemindersClientProps = {
@@ -50,13 +54,45 @@ function formatDisplayDate(value: string) {
   });
 }
 
+function reminderMatchesDate(reminder: ReminderItem, key: string) {
+  if (reminder.trigger_date?.slice(0, 10) === key) {
+    return true;
+  }
+
+  if (!reminder.is_recurring || !reminder.trigger_month || !reminder.trigger_day) {
+    return false;
+  }
+
+  const date = new Date(`${key}T00:00:00`);
+  return (
+    date.getMonth() + 1 === reminder.trigger_month &&
+    date.getDate() === reminder.trigger_day
+  );
+}
+
+function formatReminderDate(reminder: ReminderItem) {
+  if (reminder.trigger_date) {
+    return formatDisplayDate(reminder.trigger_date.slice(0, 10));
+  }
+
+  if (reminder.is_recurring && reminder.trigger_month && reminder.trigger_day) {
+    const date = new Date(2026, reminder.trigger_month - 1, reminder.trigger_day);
+    return `Every year on ${date.toLocaleDateString("en-CA", {
+      month: "short",
+      day: "numeric",
+    })}`;
+  }
+
+  return "No date";
+}
+
 export function RemindersClient({ reminders }: RemindersClientProps) {
   const router = useRouter();
   const [selectedDate, setSelectedDate] = useState(todayKey());
   const [visibleMonth, setVisibleMonth] = useState(
     new Date(`${todayKey()}T00:00:00`),
   );
-  const [showAll, setShowAll] = useState(false);
+  const [showAll, setShowAll] = useState(true);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -64,15 +100,33 @@ export function RemindersClient({ reminders }: RemindersClientProps) {
     const map = new Map<string, ReminderItem[]>();
 
     for (const reminder of reminders) {
-      if (!reminder.trigger_date) continue;
-      const key = reminder.trigger_date.slice(0, 10);
-      map.set(key, [...(map.get(key) ?? []), reminder]);
+      if (reminder.trigger_date) {
+        const key = reminder.trigger_date.slice(0, 10);
+        map.set(key, [...(map.get(key) ?? []), reminder]);
+      }
+
+      if (
+        reminder.is_recurring &&
+        reminder.trigger_month &&
+        reminder.trigger_day
+      ) {
+        const year = visibleMonth.getFullYear();
+        const recurringDate = new Date(
+          year,
+          reminder.trigger_month - 1,
+          reminder.trigger_day,
+        );
+        const key = dateKey(recurringDate);
+        map.set(key, [...(map.get(key) ?? []), reminder]);
+      }
     }
 
     return map;
-  }, [reminders]);
+  }, [reminders, visibleMonth]);
   const calendarDays = buildCalendarDays(visibleMonth);
-  const selectedReminders = reminderMap.get(selectedDate) ?? [];
+  const selectedReminders = reminders.filter((reminder) =>
+    reminderMatchesDate(reminder, selectedDate),
+  );
   const visibleReminders = showAll ? reminders : selectedReminders;
 
   function changeMonth(offset: number) {
@@ -240,9 +294,7 @@ export function RemindersClient({ reminders }: RemindersClientProps) {
               >
                 <p className="font-medium">{reminder.reminder_text}</p>
                 <p className="mt-2 text-sm text-foreground/60">
-                  {reminder.trigger_date
-                    ? formatDisplayDate(reminder.trigger_date.slice(0, 10))
-                    : "No date"}
+                  {formatReminderDate(reminder)}
                 </p>
               </article>
             ))

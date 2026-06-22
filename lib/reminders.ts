@@ -91,7 +91,7 @@ export async function getDashboardReminders(client: Client) {
     `SELECT id,
             reminder_text,
             reminder_type,
-            trigger_date,
+            COALESCE(trigger_date, CURRENT_DATE) AS trigger_date,
             trigger_month,
             trigger_day,
             is_recurring,
@@ -100,7 +100,14 @@ export async function getDashboardReminders(client: Client) {
             created_at
      FROM reminders
      WHERE is_active = TRUE
-       AND trigger_date = CURRENT_DATE
+       AND (
+         trigger_date = CURRENT_DATE
+         OR (
+           is_recurring = TRUE
+           AND trigger_month = EXTRACT(MONTH FROM CURRENT_DATE)::int
+           AND trigger_day = EXTRACT(DAY FROM CURRENT_DATE)::int
+         )
+       )
      ORDER BY created_at DESC
      LIMIT 5`,
   );
@@ -108,7 +115,25 @@ export async function getDashboardReminders(client: Client) {
     `SELECT id,
             reminder_text,
             reminder_type,
-            trigger_date,
+            COALESCE(
+              trigger_date,
+              CASE
+                WHEN make_date(
+                  EXTRACT(YEAR FROM CURRENT_DATE)::int,
+                  trigger_month,
+                  trigger_day
+                ) > CURRENT_DATE THEN make_date(
+                  EXTRACT(YEAR FROM CURRENT_DATE)::int,
+                  trigger_month,
+                  trigger_day
+                )
+                ELSE make_date(
+                  EXTRACT(YEAR FROM CURRENT_DATE)::int + 1,
+                  trigger_month,
+                  trigger_day
+                )
+              END
+            ) AS trigger_date,
             trigger_month,
             trigger_day,
             is_recurring,
@@ -117,8 +142,19 @@ export async function getDashboardReminders(client: Client) {
             created_at
      FROM reminders
      WHERE is_active = TRUE
-       AND trigger_date > CURRENT_DATE
-     ORDER BY trigger_date ASC, created_at DESC
+       AND (
+         trigger_date > CURRENT_DATE
+         OR (
+           is_recurring = TRUE
+           AND trigger_month IS NOT NULL
+           AND trigger_day IS NOT NULL
+           AND NOT (
+             trigger_month = EXTRACT(MONTH FROM CURRENT_DATE)::int
+             AND trigger_day = EXTRACT(DAY FROM CURRENT_DATE)::int
+           )
+         )
+       )
+     ORDER BY trigger_date ASC NULLS LAST, created_at DESC
      LIMIT 5`,
   );
 
