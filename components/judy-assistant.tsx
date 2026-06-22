@@ -21,6 +21,7 @@ export function JudyAssistant() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState(starterMessages);
   const [draft, setDraft] = useState("");
+  const [isThinking, setIsThinking] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -29,28 +30,69 @@ export function JudyAssistant() {
     }
   }, [isOpen, messages]);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const trimmedDraft = draft.trim();
-    if (!trimmedDraft) {
+    if (!trimmedDraft || isThinking) {
       return;
     }
 
-    setMessages((currentMessages) => [
-      ...currentMessages,
+    const nextMessages: ChatMessage[] = [
+      ...messages,
       {
         id: Date.now(),
         role: "user",
         text: trimmedDraft,
       },
-      {
-        id: Date.now() + 1,
-        role: "assistant",
-        text: "I am ready for the next step: prompt, schema, and read-only database connection.",
-      },
-    ]);
+    ];
+
+    setMessages(nextMessages);
     setDraft("");
+    setIsThinking(true);
+
+    try {
+      const response = await fetch("/api/judy", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: nextMessages.map((message) => ({
+            role: message.role,
+            text: message.text,
+          })),
+        }),
+      });
+
+      const result = (await response.json()) as {
+        answer?: string;
+        error?: string;
+      };
+
+      setMessages((currentMessages) => [
+        ...currentMessages,
+        {
+          id: Date.now() + 1,
+          role: "assistant",
+          text:
+            result.answer ||
+            result.error ||
+            "I could not answer right now. Please try again.",
+        },
+      ]);
+    } catch {
+      setMessages((currentMessages) => [
+        ...currentMessages,
+        {
+          id: Date.now() + 1,
+          role: "assistant",
+          text: "I could not reach Judy right now. Please try again.",
+        },
+      ]);
+    } finally {
+      setIsThinking(false);
+    }
   }
 
   return (
@@ -104,6 +146,13 @@ export function JudyAssistant() {
                 </div>
               </div>
             ))}
+            {isThinking ? (
+              <div className="flex justify-start">
+                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-500 shadow-sm">
+                  Judy is checking your records...
+                </div>
+              </div>
+            ) : null}
             <div ref={messagesEndRef} />
           </div>
 
@@ -131,10 +180,10 @@ export function JudyAssistant() {
               />
               <button
                 className="h-11 rounded-md bg-blue-700 px-4 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={!draft.trim()}
+                disabled={!draft.trim() || isThinking}
                 type="submit"
               >
-                Send
+                {isThinking ? "..." : "Send"}
               </button>
             </div>
           </form>
