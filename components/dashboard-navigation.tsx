@@ -23,6 +23,8 @@ export type NavigationEntity = {
 const selectedCompanyKey = "lincanada:selected-company-id";
 const menuItemClass =
   "block rounded-md px-3 py-2 text-foreground/75 hover:bg-blue-700 hover:text-white focus-visible:bg-blue-700 focus-visible:text-white";
+const diaryMenuItemClass =
+  "block rounded-md px-3 py-2 text-foreground/75 hover:bg-green-700 hover:text-white focus-visible:bg-green-700 focus-visible:text-white";
 
 function buildHref(path: string, params: Record<string, string | number | null>) {
   const query = new URLSearchParams();
@@ -239,6 +241,28 @@ function HealthMenu({
   );
 }
 
+function DiaryMenu({ showReminder }: { showReminder: boolean }) {
+  if (!showReminder) {
+    return null;
+  }
+
+  return (
+    <div className="group relative">
+      <button
+        className="h-9 rounded-md px-2 text-foreground/75 group-hover:bg-foreground/5 group-hover:text-foreground hover:bg-foreground/5 hover:text-foreground"
+        type="button"
+      >
+        Diary
+      </button>
+      <div className="invisible absolute left-0 top-full z-50 w-64 rounded-md border border-foreground/10 bg-background p-3 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
+        <Link className={diaryMenuItemClass} href="/dashboard/diary/reminders">
+          Reminders
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export function DashboardNavigation({
   enabledFeatures,
   entities,
@@ -327,6 +351,7 @@ export function DashboardNavigation({
         showBloodPressure={hasFeature("blood_pressure")}
         showWeight={hasFeature("weight")}
       />
+      <DiaryMenu showReminder={hasFeature("reminder")} />
       <Link className="text-foreground/75 hover:text-foreground" href="/dashboard/categories">
         Categories
       </Link>

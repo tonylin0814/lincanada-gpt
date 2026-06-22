@@ -36,12 +36,24 @@ type WeightSummary = {
   totalReadings: number;
 };
 
+type ReminderSummaryItem = {
+  id: number;
+  reminder_text: string;
+  trigger_date: string | null;
+};
+
+type ReminderSummary = {
+  today: ReminderSummaryItem[];
+  upcoming: ReminderSummaryItem[];
+};
+
 type DashboardClientProps = {
   availableYears: number[];
   bloodPressureSummary: BloodPressureSummary | null;
   entities: DashboardEntity[];
   summaries: ExpenseSummary[];
   pendingReceipts: PendingReceipt[];
+  reminderSummary: ReminderSummary | null;
   weightSummary: WeightSummary | null;
   year: number | "all";
 };
@@ -154,6 +166,16 @@ function formatDate(value: string | null) {
   return value ? new Date(value).toLocaleDateString() : "No readings yet";
 }
 
+function formatReminderDate(value: string | null) {
+  return value
+    ? new Date(`${value.slice(0, 10)}T00:00:00`).toLocaleDateString("en-CA", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "No date";
+}
+
 function BloodPressureBlock({
   summary,
 }: {
@@ -261,12 +283,83 @@ function WeightBlock({
   );
 }
 
+function ReminderBlock({ summary }: { summary: ReminderSummary }) {
+  return (
+    <div className="rounded-md border-2 border-green-600 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-semibold tracking-normal">Reminders</h3>
+          <p className="mt-1 text-sm text-foreground/60">
+            Today and upcoming reminders.
+          </p>
+        </div>
+        <Link
+          className="inline-flex h-10 items-center rounded-md bg-foreground px-4 text-sm font-medium text-background transition-opacity hover:opacity-85"
+          href="/dashboard/diary/reminders"
+        >
+          Open Reminders
+        </Link>
+      </div>
+
+      <div className="mt-5 grid gap-5 lg:grid-cols-2">
+        <section className="rounded-md border border-foreground/10 p-5">
+          <h4 className="text-sm font-semibold tracking-normal">
+            Today&apos;s Reminders
+          </h4>
+          <div className="mt-3 grid gap-3">
+            {summary.today.length > 0 ? (
+              summary.today.map((reminder) => (
+                <article
+                  className="rounded-md border border-foreground/10 p-3"
+                  key={reminder.id}
+                >
+                  <p className="font-medium">{reminder.reminder_text}</p>
+                </article>
+              ))
+            ) : (
+              <p className="text-sm text-foreground/60">
+                No reminders for today.
+              </p>
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-md border border-foreground/10 p-5">
+          <h4 className="text-sm font-semibold tracking-normal">
+            Upcoming Reminders
+          </h4>
+          <div className="mt-3 grid gap-3">
+            {summary.upcoming.length > 0 ? (
+              summary.upcoming.map((reminder) => (
+                <article
+                  className="rounded-md border border-foreground/10 p-3"
+                  key={reminder.id}
+                >
+                  <p className="font-medium">{reminder.reminder_text}</p>
+                  <p className="mt-1 text-sm text-foreground/60">
+                    {formatReminderDate(reminder.trigger_date)}
+                  </p>
+                </article>
+              ))
+            ) : (
+              <p className="text-sm text-foreground/60">
+                No upcoming reminders.
+              </p>
+            )}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
 export function DashboardClient({
   availableYears,
   bloodPressureSummary,
   entities,
   summaries,
   pendingReceipts,
+  reminderSummary,
   weightSummary,
   year,
 }: DashboardClientProps) {
@@ -397,6 +490,18 @@ export function DashboardClient({
             ) : null}
             {weightSummary ? <WeightBlock summary={weightSummary} /> : null}
           </div>
+        </section>
+      ) : null}
+
+      {reminderSummary ? (
+        <section className="mt-10">
+          <div className="mb-5">
+            <h2 className="text-xl font-semibold tracking-normal">Diary</h2>
+            <p className="mt-1 text-sm text-foreground/60">
+              Reminders and personal notes.
+            </p>
+          </div>
+          <ReminderBlock summary={reminderSummary} />
         </section>
       ) : null}
     </>

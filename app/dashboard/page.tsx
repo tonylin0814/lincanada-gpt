@@ -3,6 +3,7 @@ import { getCurrentSession } from "@/lib/auth";
 import { getUserDb } from "@/lib/db";
 import { getUserFeatures, syncUserRecordTypes } from "@/lib/features";
 import { getBloodPressureLogs, getWeightLogs } from "@/lib/health";
+import { getDashboardReminders } from "@/lib/reminders";
 import type { Entity } from "@/types/licanada_gpt";
 import { DashboardClient } from "./dashboard-client";
 
@@ -38,6 +39,13 @@ function parseYear(value: string | string[] | undefined) {
   return Number.isInteger(parsed) && parsed >= 2000 && parsed <= 2100
     ? parsed
     : null;
+}
+
+function serializeDateOnly(value: Date | string | null) {
+  if (!value) return null;
+  return typeof value === "string"
+    ? value.slice(0, 10)
+    : value.toISOString().slice(0, 10);
 }
 
 export default async function DashboardPage({
@@ -83,6 +91,9 @@ export default async function DashboardPage({
     );
     const showWeight = enabledFeatures.some(
       (feature) => feature.key === "weight" && feature.is_enabled,
+    );
+    const showReminder = enabledFeatures.some(
+      (feature) => feature.key === "reminder" && feature.is_enabled,
     );
 
     const yearsResult = await client.query<{ year: string }>(
@@ -148,6 +159,7 @@ export default async function DashboardPage({
       pendingResult,
       bloodPressureLogs,
       weightLogs,
+      reminderSummary,
     ] = await Promise.all([
       client.query<Entity>(
         `SELECT *
@@ -170,6 +182,9 @@ export default async function DashboardPage({
       }>(pendingSql, yearValues),
       showBloodPressure ? getBloodPressureLogs(client) : Promise.resolve([]),
       showWeight ? getWeightLogs(client) : Promise.resolve([]),
+      showReminder
+        ? getDashboardReminders(client)
+        : Promise.resolve({ today: [], upcoming: [] }),
     ]);
     const averageSystolic =
       bloodPressureLogs.length > 0
@@ -230,6 +245,22 @@ export default async function DashboardPage({
               ...receipt,
               receipt_date: receipt.receipt_date.toISOString(),
             }))}
+            reminderSummary={
+              showReminder
+                ? {
+                    today: reminderSummary.today.map((reminder) => ({
+                      id: reminder.id,
+                      reminder_text: reminder.reminder_text,
+                      trigger_date: serializeDateOnly(reminder.trigger_date),
+                    })),
+                    upcoming: reminderSummary.upcoming.map((reminder) => ({
+                      id: reminder.id,
+                      reminder_text: reminder.reminder_text,
+                      trigger_date: serializeDateOnly(reminder.trigger_date),
+                    })),
+                  }
+                : null
+            }
             summaries={summariesResult.rows.map((summary) => ({
               entity_id: summary.entity_id,
               count: Number(summary.count),
