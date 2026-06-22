@@ -105,6 +105,7 @@ export default async function BloodPressurePage() {
                 log.log_time ? String(log.log_time).slice(0, 8) : "00:00:00"
               }`,
               diastolic: log.diastolic,
+              pulse: log.pulse,
               systolic: log.systolic,
             }))}
           />

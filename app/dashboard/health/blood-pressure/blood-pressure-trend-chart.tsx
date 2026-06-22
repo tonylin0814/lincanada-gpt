@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 type TrendPoint = {
   date: string;
   diastolic: number;
+  pulse: number | null;
   systolic: number;
 };
 
@@ -19,11 +20,12 @@ const ranges: Array<{ key: RangeKey; label: string; days: number | null }> = [
 
 function buildPath(
   points: TrendPoint[],
-  valueKey: "systolic" | "diastolic",
+  valueKey: "systolic" | "diastolic" | "pulse",
   minValue: number,
   maxValue: number,
 ) {
-  if (points.length === 0) return "";
+  const chartPoints = points.filter((point) => point[valueKey] !== null);
+  if (chartPoints.length === 0) return "";
 
   const left = 48;
   const right = 24;
@@ -35,13 +37,16 @@ function buildPath(
   const chartHeight = height - top - bottom;
   const valueRange = Math.max(1, maxValue - minValue);
 
-  return points
+  return chartPoints
     .map((point, index) => {
+      const value = point[valueKey] ?? minValue;
       const x =
         left +
-        (points.length === 1 ? chartWidth / 2 : (index / (points.length - 1)) * chartWidth);
+        (chartPoints.length === 1
+          ? chartWidth / 2
+          : (index / (chartPoints.length - 1)) * chartWidth);
       const y =
-        top + ((maxValue - point[valueKey]) / valueRange) * chartHeight;
+        top + ((maxValue - value) / valueRange) * chartHeight;
       return `${index === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
     })
     .join(" ");
@@ -73,6 +78,7 @@ export function BloodPressureTrendChart({ points }: { points: TrendPoint[] }) {
   const values = filteredPoints.flatMap((point) => [
     point.systolic,
     point.diastolic,
+    ...(point.pulse !== null ? [point.pulse] : []),
   ]);
   const minValue = values.length > 0 ? Math.max(0, Math.min(...values) - 10) : 50;
   const maxValue = values.length > 0 ? Math.max(...values) + 10 : 150;
@@ -85,6 +91,12 @@ export function BloodPressureTrendChart({ points }: { points: TrendPoint[] }) {
   const diastolicPath = buildPath(
     filteredPoints,
     "diastolic",
+    minValue,
+    maxValue,
+  );
+  const pulsePath = buildPath(
+    filteredPoints,
+    "pulse",
     minValue,
     maxValue,
   );
@@ -153,6 +165,16 @@ export function BloodPressureTrendChart({ points }: { points: TrendPoint[] }) {
                 strokeLinejoin="round"
                 strokeWidth="3"
               />
+              {pulsePath ? (
+                <path
+                  d={pulsePath}
+                  fill="none"
+                  stroke="#16a34a"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="3"
+                />
+              ) : null}
             </>
           ) : (
             <text className="fill-current text-sm" opacity="0.55" x="310" y="130">
@@ -170,6 +192,10 @@ export function BloodPressureTrendChart({ points }: { points: TrendPoint[] }) {
         <span className="inline-flex items-center gap-2">
           <span className="h-2 w-6 rounded-full bg-blue-600" />
           Diastolic
+        </span>
+        <span className="inline-flex items-center gap-2">
+          <span className="h-2 w-6 rounded-full bg-green-600" />
+          Pulse
         </span>
       </div>
     </section>
