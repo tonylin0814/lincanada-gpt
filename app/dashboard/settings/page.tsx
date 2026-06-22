@@ -4,6 +4,7 @@ import { getCurrentSession } from "@/lib/auth";
 import { getWebAppDb } from "@/lib/db";
 import { getGoogleOAuthClient } from "@/lib/drive";
 import { AccountForm } from "./account-form";
+import { PasswordForm } from "./password-form";
 
 type GoogleSettingsRow = {
   google_drive_folder_id: string | null;
@@ -108,6 +109,16 @@ export default async function SettingsPage() {
             email={session.user.email ?? ""}
             name={session.user.name ?? ""}
           />
+
+          <div className="mt-8 border-t border-foreground/10 pt-6">
+            <h3 className="text-base font-semibold tracking-normal">
+              Change Password
+            </h3>
+            <p className="mt-1 text-sm text-foreground/60">
+              Enter a new password and save.
+            </p>
+            <PasswordForm />
+          </div>
         </section>
 
         <section className="mt-8 border border-foreground/10 p-5">
