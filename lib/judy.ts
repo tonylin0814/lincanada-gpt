@@ -283,17 +283,52 @@ const approvedFunctionNames = new Set([
 const bannedSqlPattern =
   /\b(insert|update|delete|upsert|merge|alter|drop|create|truncate|grant|revoke|call|do|copy|execute|prepare|notify|listen|unlisten|vacuum|analyze|set|reset|begin|commit|rollback|savepoint|release|lock)\b/i;
 
-const displayDateFormatter = new Intl.DateTimeFormat("en-CA", {
-  month: "long",
-  day: "numeric",
-  year: "numeric",
-  timeZone: "UTC",
-});
+function getJudyTimeContext() {
+  const timeZone = process.env.JUDY_TIME_ZONE || "America/Toronto";
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const getPart = (type: string) =>
+    parts.find((part) => part.type === type)?.value ?? "00";
+  const today = `${getPart("year")}-${getPart("month")}-${getPart("day")}`;
+  const localTime = `${getPart("hour")}:${getPart("minute")}:${getPart("second")}`;
+  const todayNoonUtc = new Date(`${today}T12:00:00Z`);
+  const yesterday = new Date(todayNoonUtc);
+  yesterday.setUTCDate(todayNoonUtc.getUTCDate() - 1);
+  const tomorrow = new Date(todayNoonUtc);
+  tomorrow.setUTCDate(todayNoonUtc.getUTCDate() + 1);
 
-const judySystemPrompt = `
+  return {
+    timeZone,
+    today,
+    localTime,
+    yesterday: yesterday.toISOString().slice(0, 10),
+    tomorrow: tomorrow.toISOString().slice(0, 10),
+  };
+}
+
+function getJudySystemPrompt() {
+  const timeContext = getJudyTimeContext();
+
+  return `
 You are Judy, a warm, careful, read-only assistant for Lin System.
 
 You help the signed-in user understand their own records. You can answer questions about finance records, people, places, events, reminders, and health records using only the approved database data returned by the backend.
+
+Current time context:
+- Timezone: ${timeContext.timeZone}
+- Current local date: ${timeContext.today}
+- Current local time: ${timeContext.localTime}
+- Yesterday: ${timeContext.yesterday}
+- Tomorrow: ${timeContext.tomorrow}
 
 Absolute rules:
 - You are read-only.
@@ -319,6 +354,11 @@ Absolute rules:
 - For receipt item answers, summarize what the user bought or ate. Use clean bullets for item lists.
 - If item totals do not match the full receipt total, explain cautiously that the difference may be tax, tip, or other receipt charges when those details are not clear.
 - Do not repeat "your records show" unless it helps the sentence.
+- Resolve relative dates using the current time context above.
+- "today" and "今天" mean ${timeContext.today}.
+- "yesterday" and "昨天" mean ${timeContext.yesterday}.
+- "tomorrow" and "明天" mean ${timeContext.tomorrow}.
+- If the user asks in Chinese, answer in Chinese unless they ask otherwise.
 
 Approved data areas:
 - people(id, canonical_name, relationship, notes, created_at)
@@ -348,6 +388,7 @@ When answering:
 Examples:
 - User asks: "what is my last expense? where and with who?" Look up the latest receipt, left join its place if available, left join linked event people if available, then answer with date, vendor/place, amount, category, and linked person if one exists.
 `.trim();
+}
 
 const toolDefinition = {
   type: "function" as const,
@@ -565,7 +606,12 @@ function formatDisplayDate(value: string | Date) {
     return String(value);
   }
 
-  return displayDateFormatter.format(date);
+  return new Intl.DateTimeFormat("en-CA", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: process.env.JUDY_TIME_ZONE || "America/Toronto",
+  }).format(date);
 }
 
 function formatDisplayMoney(value: string | number | null, currency: string) {
@@ -756,7 +802,7 @@ export async function askJudy(
 
   const openai = getOpenAI();
   const openAIMessages = [
-    { role: "system" as const, content: judySystemPrompt },
+    { role: "system" as const, content: getJudySystemPrompt() },
     ...toOpenAIMessages(messages),
   ];
 
