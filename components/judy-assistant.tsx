@@ -139,26 +139,26 @@ export function JudyAssistant() {
             </div>
           </form>
         </section>
-      ) : null}
-
-      <button
-        aria-label="Open Judy assistant"
-        className="group flex h-16 w-16 items-center justify-center rounded-full border border-white/80 bg-white shadow-xl shadow-slate-950/20 ring-1 ring-slate-950/10 hover:shadow-2xl"
-        onClick={() => setIsOpen(true)}
-        type="button"
-      >
-        <Image
-          alt=""
-          className="h-14 w-14 rounded-full object-cover"
-          height={56}
-          priority
-          src="/judy-img.png"
-          width={56}
-        />
-        <span className="absolute -left-20 rounded-md bg-slate-950 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-lg transition group-hover:opacity-100">
-          Judy
-        </span>
-      </button>
+      ) : (
+        <button
+          aria-label="Open Judy assistant"
+          className="group flex h-16 w-16 items-center justify-center rounded-full border border-white/80 bg-white shadow-xl shadow-slate-950/20 ring-1 ring-slate-950/10 hover:shadow-2xl"
+          onClick={() => setIsOpen(true)}
+          type="button"
+        >
+          <Image
+            alt=""
+            className="h-14 w-14 rounded-full object-cover"
+            height={56}
+            priority
+            src="/judy-img.png"
+            width={56}
+          />
+          <span className="absolute -left-20 rounded-md bg-slate-950 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-lg transition group-hover:opacity-100">
+            Judy
+          </span>
+        </button>
+      )}
     </div>
   );
 }
