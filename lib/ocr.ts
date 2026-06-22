@@ -51,8 +51,33 @@ function normalizeOcrResult(value: Partial<ReceiptOcrResult>): ReceiptOcrResult 
   return {
     ...emptyResult,
     ...value,
+    receipt_date: normalizeDateString(value.receipt_date),
     taxes: Array.isArray(value.taxes) ? value.taxes : [],
   };
+}
+
+function normalizeDateString(value: string | null | undefined) {
+  if (!value) return null;
+
+  const trimmed = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+
+  const withoutWeekday = trimmed.replace(/^[A-Za-z]{3,9}\s+/, "");
+  const hasYear = /\b\d{4}\b/.test(withoutWeekday);
+
+  if (!hasYear) {
+    const withCurrentYear = new Date(`${withoutWeekday} ${new Date().getFullYear()}`);
+    if (!Number.isNaN(withCurrentYear.getTime())) {
+      return withCurrentYear.toISOString().slice(0, 10);
+    }
+  }
+
+  const parsed = new Date(trimmed);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 10);
+  }
+
+  return null;
 }
 
 export async function ocrReceipt(imageBase64: string): Promise<ReceiptOcrResult> {

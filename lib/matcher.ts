@@ -22,6 +22,10 @@ function create(): MatchResult {
   return { confidence: 0, match: null, candidates: null, action: "create" };
 }
 
+function isIsoDate(value: string | null | undefined) {
+  return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
+}
+
 async function firstReceipt(
   client: Client,
   sql: string,
@@ -47,6 +51,7 @@ export async function matchReceipt(
 ): Promise<MatchResult> {
   const vendorPattern = ocr.vendor ? `%${ocr.vendor}%` : null;
   const addressPattern = ocr.vendor_address ? `%${ocr.vendor_address}%` : null;
+  const receiptDate = isIsoDate(ocr.receipt_date) ? ocr.receipt_date : null;
 
   if (exif.filename) {
     const match = await firstReceipt(
@@ -110,7 +115,7 @@ export async function matchReceipt(
     if (match) return auto(match, 99);
   }
 
-  if (vendorPattern && ocr.receipt_date && ocr.receipt_time && ocr.grand_total) {
+  if (vendorPattern && receiptDate && ocr.receipt_time && ocr.grand_total) {
     const match = await firstReceipt(
       client,
       `SELECT * FROM receipts
@@ -119,12 +124,12 @@ export async function matchReceipt(
          AND receipt_time = $3::time
          AND grand_total = $4::numeric
        LIMIT 1`,
-      [vendorPattern, ocr.receipt_date, ocr.receipt_time, ocr.grand_total],
+      [vendorPattern, receiptDate, ocr.receipt_time, ocr.grand_total],
     );
     if (match) return auto(match, 95);
   }
 
-  if (addressPattern && ocr.receipt_date && ocr.grand_total) {
+  if (addressPattern && receiptDate && ocr.grand_total) {
     const match = await firstReceipt(
       client,
       `SELECT * FROM receipts
@@ -132,12 +137,12 @@ export async function matchReceipt(
          AND receipt_date = $2::date
          AND grand_total = $3::numeric
        LIMIT 1`,
-      [addressPattern, ocr.receipt_date, ocr.grand_total],
+      [addressPattern, receiptDate, ocr.grand_total],
     );
     if (match) return auto(match, 90);
   }
 
-  if (vendorPattern && ocr.receipt_date && ocr.grand_total) {
+  if (vendorPattern && receiptDate && ocr.grand_total) {
     const candidates = await receiptCandidates(
       client,
       `SELECT * FROM receipts
@@ -145,20 +150,20 @@ export async function matchReceipt(
          AND receipt_date = $2::date
          AND grand_total = $3::numeric
        ORDER BY created_at DESC`,
-      [vendorPattern, ocr.receipt_date, ocr.grand_total],
+      [vendorPattern, receiptDate, ocr.grand_total],
     );
     if (candidates.length === 1) return auto(candidates[0], 85);
     if (candidates.length > 1) return pick(candidates, 80);
   }
 
-  if (vendorPattern && ocr.receipt_date) {
+  if (vendorPattern && receiptDate) {
     const candidates = await receiptCandidates(
       client,
       `SELECT * FROM receipts
        WHERE vendor ILIKE $1
          AND receipt_date = $2::date
        ORDER BY created_at DESC`,
-      [vendorPattern, ocr.receipt_date],
+      [vendorPattern, receiptDate],
     );
     if (candidates.length > 0) return pick(candidates, 60);
   }
