@@ -176,6 +176,13 @@ function buildSavePayload(form: HTMLFormElement, review: SavedReview) {
 function matchDisplay(upload: UploadFile) {
   const match = upload.match_result;
 
+  if (!match && upload.selected_record_r_number) {
+    return {
+      className: "font-medium text-red-600",
+      label: `Force matched ${upload.selected_record_r_number}`,
+    };
+  }
+
   if (!match) {
     return {
       className: "font-medium text-foreground",
@@ -493,7 +500,9 @@ export function UploadClient({
         failedUploads.push({
           ...upload,
           status: "Error",
-          error: body?.error ?? "Could not upload receipt.",
+          error:
+            body?.error ??
+            `Could not upload receipt. Server returned ${response.status}.`,
         });
         continue;
       }
@@ -841,7 +850,7 @@ function UploadEditCard({
                 <input
                   className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3 uppercase"
                   defaultValue={upload.selected_record_r_number ?? ""}
-                  onBlur={(event) =>
+                  onChange={(event) =>
                     onRecordChange(event.currentTarget.value.trim().toUpperCase())
                   }
                   placeholder="PER-R-0001"
