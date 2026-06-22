@@ -49,7 +49,10 @@ function FinanceActionLinks({
   return (
     <div className="mt-2 grid gap-1">
       {showExpense ? (
-        <>
+        <div>
+          <p className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-foreground/45">
+            Expense
+          </p>
           <Link
             className={menuItemClass}
             href={buildHref("/dashboard/records", {
@@ -77,10 +80,17 @@ function FinanceActionLinks({
           >
             Expense Reports
           </Link>
-        </>
+        </div>
       ) : null}
       {showRevenue ? (
-        <>
+        <div
+          className={
+            showExpense ? "mt-2 border-t border-foreground/10 pt-2" : ""
+          }
+        >
+          <p className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-foreground/45">
+            Revenue
+          </p>
           <Link
             className={menuItemClass}
             href={buildHref("/dashboard/records", {
@@ -108,7 +118,7 @@ function FinanceActionLinks({
           >
             Revenue Reports
           </Link>
-        </>
+        </div>
       ) : null}
     </div>
   );
