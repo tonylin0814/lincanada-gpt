@@ -85,7 +85,28 @@ export default async function DashboardPage() {
   }
 
   const year = new Date().getFullYear();
-  const client = await getUserDb(session.user.supabase_connection_string);
+  const client = await getUserDb(
+    session.user.supabase_connection_string,
+  ).catch(() => null);
+
+  if (!client) {
+    return (
+      <main className="min-h-screen bg-background px-6 py-10 text-foreground">
+        <div className="mx-auto max-w-4xl">
+          <section className="border border-red-200 p-5">
+            <h1 className="text-2xl font-semibold tracking-normal">
+              Database Connection Needs Attention
+            </h1>
+            <p className="mt-3 text-sm text-foreground/65">
+              Your account is connected, but the app could not open your
+              Supabase database. Please ask an admin to check the Supabase
+              connection string for {session.user.email}.
+            </p>
+          </section>
+        </div>
+      </main>
+    );
+  }
 
   try {
     const [summary, entities] = await Promise.all([

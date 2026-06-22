@@ -82,7 +82,14 @@ async function refreshTokenFromUserEmail(token: JWT) {
     return token;
   }
 
-  const appUser = await getActiveUserByEmail(token.email);
+  let appUser: AuthUser | null = null;
+
+  try {
+    appUser = await getActiveUserByEmail(token.email);
+  } catch (error) {
+    console.error("Could not refresh user session settings:", error);
+    return token;
+  }
 
   if (!appUser) {
     return token;
