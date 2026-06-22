@@ -46,6 +46,7 @@ const acceptedTypes = [
   "image/heif",
   "application/pdf",
 ];
+const maxFilesPerBatch = 10;
 
 const emptyOcr: ReceiptOcrResult = {
   vendor: null,
@@ -303,6 +304,11 @@ export function UploadClient({
         lower.endsWith(".pdf")
       );
     });
+
+    if (uploads.length + files.length > maxFilesPerBatch) {
+      setError(`Upload ${maxFilesPerBatch} files maximum at once.`);
+      return;
+    }
 
     if (files.length === 0) {
       setError("Choose JPG, PNG, HEIC, or PDF files.");
@@ -670,12 +676,14 @@ export function UploadClient({
               : "A Google Drive folder ID is required before archiving."}
           </p>
         </div>
-        <a
-          className="inline-flex h-10 items-center rounded-md bg-foreground px-4 text-sm font-medium text-background transition-opacity hover:opacity-85"
-          href="/api/auth/google"
-        >
-          {hasGoogleConnection ? "Reconnect Google Drive" : "Connect Google Drive"}
-        </a>
+        {!hasGoogleConnection ? (
+          <a
+            className="inline-flex h-10 items-center rounded-md bg-foreground px-4 text-sm font-medium text-background transition-opacity hover:opacity-85"
+            href="/api/auth/google"
+          >
+            Connect Google Drive
+          </a>
+        ) : null}
       </div>
 
       {!activeReview ? (
@@ -688,6 +696,9 @@ export function UploadClient({
             <span className="text-lg font-medium">Drop receipts here</span>
             <span className="mt-2 text-sm text-foreground/60">
               or click to select JPG, PNG, HEIC, or PDF files
+            </span>
+            <span className="mt-1 text-xs text-foreground/50">
+              File size must be smaller than 4.4 MB. Maximum 10 uploads at once.
             </span>
             <input
               accept={accepted}
