@@ -4,6 +4,7 @@ import {
   DashboardNavigation,
   type NavigationEntity,
 } from "@/components/dashboard-navigation";
+import { JudyAssistant } from "@/components/judy-assistant";
 import { PageLoadingIndicator } from "@/components/page-loading-indicator";
 import { getCurrentSession } from "@/lib/auth";
 import { getUserDb } from "@/lib/db";
@@ -82,6 +83,7 @@ export default async function RootLayout({
           </header>
         ) : null}
         {children}
+        {session?.user ? <JudyAssistant /> : null}
       </body>
     </html>
   );
