@@ -51,6 +51,8 @@ export default async function RootLayout({
           name: entity.name,
           type: entity.type,
         }));
+      } catch (error) {
+        console.error("Could not load navigation entities:", error);
       } finally {
         await client.end();
       }

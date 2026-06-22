@@ -54,6 +54,25 @@ function SummaryBlock({
   );
 }
 
+function SetupMessage({
+  title,
+  message,
+}: {
+  title: string;
+  message: string;
+}) {
+  return (
+    <main className="min-h-screen bg-background px-6 py-10 text-foreground">
+      <div className="mx-auto max-w-4xl">
+        <section className="border border-foreground/10 p-5">
+          <h1 className="text-2xl font-semibold tracking-normal">{title}</h1>
+          <p className="mt-3 text-sm text-foreground/65">{message}</p>
+        </section>
+      </div>
+    </main>
+  );
+}
+
 export default async function DashboardPage() {
   const session = await getCurrentSession();
 
@@ -63,24 +82,10 @@ export default async function DashboardPage() {
 
   if (!session.user.supabase_connection_string) {
     return (
-      <main className="min-h-screen bg-background px-6 py-10 text-foreground">
-        <div className="mx-auto max-w-4xl">
-          <section className="border border-foreground/10 p-5">
-            <h1 className="text-2xl font-semibold tracking-normal">
-              Account Created
-            </h1>
-            <p className="mt-3 text-sm text-foreground/65">
-              Your Google account is registered. This user still needs a
-              Supabase database connection before records, uploads, and reports
-              can be used.
-            </p>
-            <p className="mt-4 text-sm font-medium">
-              Ask an admin to add the Supabase connection string for{" "}
-              {session.user.email}.
-            </p>
-          </section>
-        </div>
-      </main>
+      <SetupMessage
+        message={`Your account is registered, but it still needs a Supabase database connection before records, uploads, and reports can be used. Ask an admin to add the Supabase connection string for ${session.user.email}.`}
+        title="Account Registered"
+      />
     );
   }
 
@@ -91,20 +96,10 @@ export default async function DashboardPage() {
 
   if (!client) {
     return (
-      <main className="min-h-screen bg-background px-6 py-10 text-foreground">
-        <div className="mx-auto max-w-4xl">
-          <section className="border border-red-200 p-5">
-            <h1 className="text-2xl font-semibold tracking-normal">
-              Database Connection Needs Attention
-            </h1>
-            <p className="mt-3 text-sm text-foreground/65">
-              Your account is connected, but the app could not open your
-              Supabase database. Please ask an admin to check the Supabase
-              connection string for {session.user.email}.
-            </p>
-          </section>
-        </div>
-      </main>
+      <SetupMessage
+        message={`Your account is connected, but the app could not open your Supabase database. Please ask an admin to check the Supabase connection string for ${session.user.email}.`}
+        title="Database Connection Needs Attention"
+      />
     );
   }
 
@@ -196,6 +191,14 @@ export default async function DashboardPage() {
           </section>
         </div>
       </main>
+    );
+  } catch (error) {
+    console.error("Could not load dashboard data:", error);
+    return (
+      <SetupMessage
+        message="Your database is connected, but the app could not read the required tables. If you just reset this Supabase database, run schema.sql first, then sample_data.sql if you want to copy the exported data."
+        title="Database Schema Needs Attention"
+      />
     );
   } finally {
     await client.end();
