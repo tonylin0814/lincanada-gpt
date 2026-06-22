@@ -5,6 +5,7 @@ import {
   type UpdateAdminUserInput,
 } from "@/lib/admin-users";
 import { getCurrentSession } from "@/lib/auth";
+import { updateUserFeatures } from "@/lib/features";
 import { initializeUserDatabase } from "@/lib/user-database-setup";
 
 type RouteContext = {
@@ -41,6 +42,7 @@ export async function PUT(request: Request, { params }: RouteContext) {
 
   const body = (await request.json()) as Partial<UpdateAdminUserInput> & {
     initialize_database?: boolean;
+    enabled_features?: unknown;
   };
 
   const supabaseConnectionString =
@@ -74,6 +76,15 @@ export async function PUT(request: Request, { params }: RouteContext) {
 
   if (!user) {
     return NextResponse.json({ error: "User not found." }, { status: 404 });
+  }
+
+  if (Array.isArray(body.enabled_features)) {
+    await updateUserFeatures(
+      id,
+      body.enabled_features.filter(
+        (featureKey): featureKey is string => typeof featureKey === "string",
+      ),
+    );
   }
 
   return NextResponse.json({ user });

@@ -3,12 +3,27 @@
 import { FormEvent, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AdminUserDetail } from "@/lib/admin-users";
+import type { UserFeature } from "@/lib/features";
 
 type EditUserFormProps = {
   user: AdminUserDetail;
+  features: UserFeature[];
+  detectedRecordTypes: Array<{
+    record_category: string;
+    record_type: string;
+    feature_key: string | null;
+    record_count: number;
+    confidence: string;
+    source_table: string;
+    last_seen_at: string | null;
+  }>;
 };
 
-export function EditUserForm({ user }: EditUserFormProps) {
+export function EditUserForm({
+  user,
+  features,
+  detectedRecordTypes,
+}: EditUserFormProps) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [error, setError] = useState("");
@@ -70,6 +85,7 @@ export function EditUserForm({ user }: EditUserFormProps) {
         supabase_connection_string: formData.get("supabase_connection_string"),
         google_drive_folder_id: formData.get("google_drive_folder_id"),
         initialize_database: shouldInitialize,
+        enabled_features: formData.getAll("enabled_features"),
       }),
     });
 
@@ -231,6 +247,79 @@ export function EditUserForm({ user }: EditUserFormProps) {
             name="google_drive_folder_id"
           />
         </label>
+        <section className="rounded-md border border-foreground/10 p-4">
+          <h2 className="text-base font-semibold tracking-normal">
+            Detected Data
+          </h2>
+          <p className="mt-1 text-sm text-foreground/60">
+            Read-only summary from this user&apos;s Supabase database.
+          </p>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[640px] text-left text-sm">
+              <thead className="bg-foreground/5">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Category</th>
+                  <th className="px-3 py-2 font-medium">Type</th>
+                  <th className="px-3 py-2 font-medium">Count</th>
+                  <th className="px-3 py-2 font-medium">Confidence</th>
+                  <th className="px-3 py-2 font-medium">Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detectedRecordTypes.length > 0 ? (
+                  detectedRecordTypes.map((recordType) => (
+                    <tr
+                      className="border-t border-foreground/10"
+                      key={`${recordType.record_category}-${recordType.record_type}-${recordType.source_table}`}
+                    >
+                      <td className="px-3 py-2">{recordType.record_category}</td>
+                      <td className="px-3 py-2">{recordType.record_type}</td>
+                      <td className="px-3 py-2">{recordType.record_count}</td>
+                      <td className="px-3 py-2">{recordType.confidence}</td>
+                      <td className="px-3 py-2">{recordType.source_table}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td className="px-3 py-4 text-foreground/60" colSpan={5}>
+                      No detected data yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <section className="rounded-md border border-foreground/10 p-4">
+          <h2 className="text-base font-semibold tracking-normal">
+            Enabled Features
+          </h2>
+          <p className="mt-1 text-sm text-foreground/60">
+            These checkboxes control what this user can see in Lin System.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {features.map((feature) => (
+              <label
+                className="flex items-start gap-3 rounded-md border border-foreground/10 p-3 text-sm"
+                key={feature.key}
+              >
+                <input
+                  className="mt-1 h-4 w-4"
+                  defaultChecked={feature.is_enabled}
+                  name="enabled_features"
+                  type="checkbox"
+                  value={feature.key}
+                />
+                <span>
+                  <span className="block font-medium">{feature.label}</span>
+                  <span className="mt-1 block text-foreground/55">
+                    {feature.group} / {feature.record_type}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </section>
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
         {saveStatus ? (
           <p className="text-sm text-green-700">{saveStatus}</p>

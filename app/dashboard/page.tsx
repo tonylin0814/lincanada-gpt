@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth";
 import { getUserDb } from "@/lib/db";
+import { syncUserRecordTypes } from "@/lib/features";
 import type { Entity } from "@/types/licanada_gpt";
 import { DashboardClient } from "./dashboard-client";
 
@@ -72,6 +73,10 @@ export default async function DashboardPage({
   }
 
   try {
+    await syncUserRecordTypes(session.user.id, client).catch((error) => {
+      console.error("Could not sync user record types:", error);
+    });
+
     const yearsResult = await client.query<{ year: string }>(
       `SELECT DISTINCT EXTRACT(YEAR FROM receipt_date)::int AS year
        FROM receipts

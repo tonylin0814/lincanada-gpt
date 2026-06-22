@@ -7,6 +7,7 @@ import {
 import { PageLoadingIndicator } from "@/components/page-loading-indicator";
 import { getCurrentSession } from "@/lib/auth";
 import { getUserDb } from "@/lib/db";
+import { getUserFeatures } from "@/lib/features";
 import { getEntities } from "@/lib/queries";
 import "./globals.css";
 
@@ -37,8 +38,13 @@ export default async function RootLayout({
 }>) {
   const session = await getCurrentSession();
   let entities: NavigationEntity[] = [];
+  let enabledFeatures: string[] = [];
 
   if (session?.user.supabase_connection_string) {
+    enabledFeatures = (await getUserFeatures(session.user.id))
+      .filter((feature) => feature.is_enabled)
+      .map((feature) => feature.key);
+
     const client = await getUserDb(session.user.supabase_connection_string).catch(
       () => null,
     );
@@ -68,6 +74,7 @@ export default async function RootLayout({
         {session?.user ? (
           <header className="border-b border-foreground/10 bg-background px-6 py-4 text-sm text-foreground print:hidden">
             <DashboardNavigation
+              enabledFeatures={enabledFeatures}
               entities={entities}
               isAdmin={session.user.is_admin}
               userName={session.user.name ?? session.user.email ?? "User"}

@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { startPageLoading } from "@/components/page-loading-indicator";
 
 type DashboardNavigationProps = {
+  enabledFeatures: string[];
   entities: NavigationEntity[];
   isAdmin: boolean;
   userName: string;
@@ -77,12 +78,16 @@ function FinanceMenu({
   selectedCompanyId,
   onCompanyChange,
   kind,
+  showPersonal,
+  showCompany,
 }: {
   title: string;
   entities: NavigationEntity[];
   selectedCompanyId: number | null;
   onCompanyChange: (id: number) => void;
   kind: "expense" | "revenue";
+  showPersonal: boolean;
+  showCompany: boolean;
 }) {
   const personalEntity = entities.find((entity) => entity.type === "personal");
   const companyEntities = entities.filter((entity) => entity.type === "company");
@@ -100,40 +105,45 @@ function FinanceMenu({
         {title}
       </button>
       <div className="invisible absolute left-0 top-full z-50 w-72 rounded-md border border-foreground/10 bg-background p-3 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
-        <div className="rounded-md border border-foreground/10 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">
-            Personal
-          </p>
-          <SectionLinks entityId={personalEntity?.id ?? null} kind={kind} />
-        </div>
+        {showPersonal ? (
+          <div className="rounded-md border border-foreground/10 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">
+              Personal
+            </p>
+            <SectionLinks entityId={personalEntity?.id ?? null} kind={kind} />
+          </div>
+        ) : null}
 
-        <div className="mt-3 rounded-md border border-foreground/10 p-3">
-          <label className="text-xs font-semibold uppercase tracking-wide text-foreground/55">
-            Company
-            <select
-              className="mt-2 h-9 w-full rounded-md border border-foreground/20 bg-background px-2 text-sm font-normal normal-case tracking-normal text-foreground"
-              disabled={companyEntities.length === 0}
-              onChange={(event) => onCompanyChange(Number(event.currentTarget.value))}
-              value={activeCompany?.id ?? ""}
-            >
-              {companyEntities.length === 0 ? (
-                <option value="">No company yet</option>
-              ) : null}
-              {companyEntities.map((entity) => (
-                <option key={entity.id} value={entity.id}>
-                  {entity.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <SectionLinks entityId={activeCompany?.id ?? null} kind={kind} />
-        </div>
+        {showCompany ? (
+          <div className={showPersonal ? "mt-3 rounded-md border border-foreground/10 p-3" : "rounded-md border border-foreground/10 p-3"}>
+            <label className="text-xs font-semibold uppercase tracking-wide text-foreground/55">
+              Company
+              <select
+                className="mt-2 h-9 w-full rounded-md border border-foreground/20 bg-background px-2 text-sm font-normal normal-case tracking-normal text-foreground"
+                disabled={companyEntities.length === 0}
+                onChange={(event) => onCompanyChange(Number(event.currentTarget.value))}
+                value={activeCompany?.id ?? ""}
+              >
+                {companyEntities.length === 0 ? (
+                  <option value="">No company yet</option>
+                ) : null}
+                {companyEntities.map((entity) => (
+                  <option key={entity.id} value={entity.id}>
+                    {entity.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <SectionLinks entityId={activeCompany?.id ?? null} kind={kind} />
+          </div>
+        ) : null}
       </div>
     </div>
   );
 }
 
 export function DashboardNavigation({
+  enabledFeatures,
   entities,
   isAdmin,
   userName,
@@ -186,6 +196,10 @@ export function DashboardNavigation({
     }
   }
 
+  const hasFeature = (featureKey: string) => enabledFeatures.includes(featureKey);
+  const showExpense = hasFeature("personal_expense") || hasFeature("company_expense");
+  const showRevenue = hasFeature("personal_revenue") || hasFeature("company_revenue");
+
   return (
     <nav className="mx-auto flex max-w-6xl items-center gap-4">
       <Link className="flex items-center gap-2 font-semibold" href="/dashboard">
@@ -198,20 +212,36 @@ export function DashboardNavigation({
         />
         Lin System
       </Link>
-      <FinanceMenu
-        entities={entities}
-        kind="expense"
-        onCompanyChange={changeCompany}
-        selectedCompanyId={selectedCompanyId}
-        title="Expense"
-      />
-      <FinanceMenu
-        entities={entities}
-        kind="revenue"
-        onCompanyChange={changeCompany}
-        selectedCompanyId={selectedCompanyId}
-        title="Revenue"
-      />
+      {showExpense ? (
+        <FinanceMenu
+          entities={entities}
+          kind="expense"
+          onCompanyChange={changeCompany}
+          selectedCompanyId={selectedCompanyId}
+          showCompany={hasFeature("company_expense")}
+          showPersonal={hasFeature("personal_expense")}
+          title="Expense"
+        />
+      ) : null}
+      {showRevenue ? (
+        <FinanceMenu
+          entities={entities}
+          kind="revenue"
+          onCompanyChange={changeCompany}
+          selectedCompanyId={selectedCompanyId}
+          showCompany={hasFeature("company_revenue")}
+          showPersonal={hasFeature("personal_revenue")}
+          title="Revenue"
+        />
+      ) : null}
+      {hasFeature("blood_pressure") ? (
+        <Link
+          className="text-foreground/75 hover:text-foreground"
+          href="/dashboard/health/blood-pressure"
+        >
+          Blood Pressure
+        </Link>
+      ) : null}
       <Link className="text-foreground/75 hover:text-foreground" href="/dashboard/categories">
         Categories
       </Link>
