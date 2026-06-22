@@ -114,6 +114,11 @@ function escapeHtml(value: unknown) {
     .replace(/"/g, "&quot;");
 }
 
+function getReturnTo(searchParams: URLSearchParams, fallback: string) {
+  const returnTo = searchParams.get("returnTo");
+  return returnTo?.startsWith("/dashboard/records") ? returnTo : fallback;
+}
+
 function Field({
   label,
   name,
@@ -215,6 +220,7 @@ export function ReceiptRecordClient({
   const previewUrl = getDrivePreviewUrl(receipt.attachment_link);
   const receiptDownloadUrl = getDriveDownloadUrl(receipt.attachment_link);
   const receiptDate = toDateInputValue(receipt.receipt_date);
+  const backToRecords = getReturnTo(searchParams, "/dashboard/records?tab=receipts");
 
   function printReceipt() {
     if (!previewUrl) return;
@@ -307,7 +313,10 @@ export function ReceiptRecordClient({
     }
 
     setEditMode(false);
-    window.history.replaceState(null, "", pathname);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("edit");
+    const query = params.toString();
+    window.history.replaceState(null, "", `${pathname}${query ? `?${query}` : ""}`);
     router.refresh();
   }
 
@@ -335,7 +344,7 @@ export function ReceiptRecordClient({
       return;
     }
 
-    router.push("/dashboard/records?tab=receipts");
+    router.push(backToRecords);
     router.refresh();
   }
 
@@ -344,7 +353,7 @@ export function ReceiptRecordClient({
       <div className="flex flex-wrap items-center justify-between gap-4 print:hidden">
         <button
           className="text-sm underline"
-          onClick={() => router.push("/dashboard/records?tab=receipts")}
+          onClick={() => router.push(backToRecords)}
           type="button"
         >
           Back to records

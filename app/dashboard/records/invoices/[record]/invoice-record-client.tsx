@@ -99,6 +99,11 @@ function escapeHtml(value: unknown) {
     .replace(/"/g, "&quot;");
 }
 
+function getReturnTo(searchParams: URLSearchParams, fallback: string) {
+  const returnTo = searchParams.get("returnTo");
+  return returnTo?.startsWith("/dashboard/records") ? returnTo : fallback;
+}
+
 function Field({
   label,
   name,
@@ -199,6 +204,7 @@ export function InvoiceRecordClient({
   const previewUrl = getDrivePreviewUrl(invoice.attachment_link);
   const invoiceDownloadUrl = getDriveDownloadUrl(invoice.attachment_link);
   const invoiceDate = toDateInputValue(invoice.invoice_date);
+  const backToRecords = getReturnTo(searchParams, "/dashboard/records?tab=invoices");
 
   function printInvoice() {
     if (!previewUrl) return;
@@ -287,7 +293,10 @@ export function InvoiceRecordClient({
     }
 
     setEditMode(false);
-    window.history.replaceState(null, "", pathname);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("edit");
+    const query = params.toString();
+    window.history.replaceState(null, "", `${pathname}${query ? `?${query}` : ""}`);
     router.refresh();
   }
 
@@ -315,7 +324,7 @@ export function InvoiceRecordClient({
       return;
     }
 
-    router.push("/dashboard/records?tab=invoices");
+    router.push(backToRecords);
     router.refresh();
   }
 
@@ -324,7 +333,7 @@ export function InvoiceRecordClient({
       <div className="flex flex-wrap items-center justify-between gap-4 print:hidden">
         <button
           className="text-sm underline"
-          onClick={() => router.push("/dashboard/records?tab=invoices")}
+          onClick={() => router.push(backToRecords)}
           type="button"
         >
           Back to records

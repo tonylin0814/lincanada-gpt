@@ -90,6 +90,16 @@ function buildHref(
   return `/dashboard/records${query ? `?${query}` : ""}`;
 }
 
+function buildRecordDetailHref(
+  path: string,
+  searchParams: RecordsPageProps["searchParams"],
+) {
+  const returnTo = buildHref(searchParams, {});
+  const params = new URLSearchParams({ returnTo });
+
+  return `${path}?${params.toString()}`;
+}
+
 function formatDate(value: Date | string | null) {
   if (!value) {
     return "";
@@ -316,9 +326,12 @@ function ReceiptsTable({
               <td className="px-4 py-3">
                 <Link
                   className="underline"
-                  href={`/dashboard/records/receipts/${encodeURIComponent(
+                  href={buildRecordDetailHref(
+                    `/dashboard/records/receipts/${encodeURIComponent(
                     receipt.record_r_number,
-                  )}`}
+                  )}`,
+                    searchParams,
+                  )}
                 >
                   Review
                 </Link>
@@ -385,9 +398,12 @@ function InvoicesTable({
               <td className="px-4 py-3">
                 <Link
                   className="underline"
-                  href={`/dashboard/records/invoices/${encodeURIComponent(
+                  href={buildRecordDetailHref(
+                    `/dashboard/records/invoices/${encodeURIComponent(
                     invoice.record_i_number,
-                  )}`}
+                  )}`,
+                    searchParams,
+                  )}
                 >
                   Review
                 </Link>
