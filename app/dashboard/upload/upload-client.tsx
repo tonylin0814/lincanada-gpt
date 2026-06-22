@@ -68,6 +68,54 @@ function canPreview(file: File) {
   return file.type === "image/jpeg" || file.type === "image/png";
 }
 
+async function compressImageForUpload(file: File) {
+  if (!canPreview(file) || file.size < 2_500_000) {
+    return file;
+  }
+
+  const imageUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error("Could not read image."));
+      element.src = imageUrl;
+    });
+
+    const maxSide = 1800;
+    const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+    const width = Math.max(1, Math.round(image.width * scale));
+    const height = Math.max(1, Math.round(image.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext("2d");
+    if (!context) return file;
+
+    context.drawImage(image, 0, 0, width, height);
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/jpeg", 0.82);
+    });
+
+    if (!blob || blob.size >= file.size) {
+      return file;
+    }
+
+    const nextName = file.name.replace(/\.[^.]+$/, "") + ".jpg";
+    return new File([blob], nextName, {
+      type: "image/jpeg",
+      lastModified: file.lastModified,
+    });
+  } catch {
+    return file;
+  } finally {
+    URL.revokeObjectURL(imageUrl);
+  }
+}
+
 function createUploadFiles(files: File[]) {
   return files.map((file) => ({
     id: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
@@ -480,8 +528,9 @@ export function UploadClient({
         continue;
       }
 
+      const uploadFile = await compressImageForUpload(upload.file);
       const formData = new FormData();
-      formData.append("image_file", upload.file);
+      formData.append("image_file", uploadFile);
       formData.append("match_action", "link");
       formData.append("record_r_number", selectedRecord);
       formData.append("entity_id", String(selectedEntityId));
@@ -502,7 +551,9 @@ export function UploadClient({
           status: "Error",
           error:
             body?.error ??
-            `Could not upload receipt. Server returned ${response.status}.`,
+            (response.status === 413
+              ? "Could not upload receipt. The image is too large."
+              : `Could not upload receipt. Server returned ${response.status}.`),
         });
         continue;
       }
