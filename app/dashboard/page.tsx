@@ -90,8 +90,11 @@ export default async function DashboardPage() {
                 grand_total,
                 currency
          FROM receipts
-         WHERE attachment_link IS NULL OR attachment_link = ''
+         WHERE (attachment_link IS NULL OR attachment_link = '')
+           AND receipt_date >= $1::date
+           AND receipt_date < $2::date
          ORDER BY receipt_date DESC, created_at DESC`,
+        [`${year}-01-01`, `${year + 1}-01-01`],
       ),
     ]);
 
