@@ -44,6 +44,10 @@ export async function ensureBloodPressureTable(client: Client) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await client.query(`
+    ALTER TABLE blood_pressure_logs
+    ALTER COLUMN log_time SET DEFAULT CURRENT_TIME
+  `);
 }
 
 export async function getBloodPressureLogs(client: Client) {
@@ -110,4 +114,13 @@ export async function createBloodPressureLog(
   );
 
   return result.rows[0];
+}
+
+export async function fillMissingBloodPressureTimes(client: Client) {
+  await ensureBloodPressureTable(client);
+  await client.query(`
+    UPDATE blood_pressure_logs
+    SET log_time = (created_at AT TIME ZONE 'America/Toronto')::time
+    WHERE log_time IS NULL
+  `);
 }

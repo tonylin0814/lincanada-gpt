@@ -2,7 +2,10 @@ import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth";
 import { getUserDb } from "@/lib/db";
 import { getUserFeatures, syncUserRecordTypes } from "@/lib/features";
-import { getBloodPressureLogs } from "@/lib/health";
+import {
+  fillMissingBloodPressureTimes,
+  getBloodPressureLogs,
+} from "@/lib/health";
 import { BloodPressureForm } from "./blood-pressure-form";
 
 function formatDate(value: Date | string) {
@@ -32,6 +35,7 @@ export default async function BloodPressurePage() {
   const client = await getUserDb(session.user.supabase_connection_string);
 
   try {
+    await fillMissingBloodPressureTimes(client);
     const logs = await getBloodPressureLogs(client);
     await syncUserRecordTypes(session.user.id, client).catch((error) => {
       console.error("Could not sync blood pressure record type:", error);

@@ -17,6 +17,16 @@ function toNullableNumber(value: unknown) {
   return Number.isFinite(number) ? number : null;
 }
 
+function currentTorontoTime() {
+  return new Intl.DateTimeFormat("en-CA", {
+    hour: "2-digit",
+    hour12: false,
+    minute: "2-digit",
+    second: "2-digit",
+    timeZone: "America/Toronto",
+  }).format(new Date());
+}
+
 export async function POST(request: Request) {
   const session = await getCurrentSession();
 
@@ -47,7 +57,7 @@ export async function POST(request: Request) {
       device: toNullableString(body.device),
       diastolic,
       log_date: logDate,
-      log_time: toNullableString(body.log_time),
+      log_time: toNullableString(body.log_time) ?? currentTorontoTime(),
       notes: toNullableString(body.notes),
       position: toNullableString(body.position),
       pulse: toNullableNumber(body.pulse),

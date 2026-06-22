@@ -159,7 +159,7 @@ SET default_table_access_method = heap;
 CREATE TABLE public.blood_pressure_logs (
     id integer NOT NULL,
     log_date date DEFAULT CURRENT_DATE NOT NULL,
-    log_time time without time zone,
+    log_time time without time zone DEFAULT CURRENT_TIME,
     person_id integer,
     systolic integer NOT NULL,
     diastolic integer NOT NULL,
