@@ -212,6 +212,9 @@ export function DashboardNavigation({
         selectedCompanyId={selectedCompanyId}
         title="Revenue"
       />
+      <Link className="text-foreground/75 hover:text-foreground" href="/dashboard/categories">
+        Categories
+      </Link>
       <Link className="text-foreground/75 hover:text-foreground" href="/dashboard/settings">
         Settings
       </Link>

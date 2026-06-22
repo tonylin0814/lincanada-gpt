@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { google } from "googleapis";
 import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth";
 import { getWebAppDb } from "@/lib/db";
 import { getGoogleOAuthClient } from "@/lib/drive";
+import { AccountForm } from "./account-form";
 
 type GoogleSettingsRow = {
   google_drive_folder_id: string | null;
@@ -94,8 +94,21 @@ export default async function SettingsPage() {
       <div className="mx-auto max-w-5xl">
         <h1 className="text-2xl font-semibold tracking-normal">Settings</h1>
         <p className="mt-2 text-sm text-foreground/65">
-          Manage account storage and record settings.
+          Manage user information and Google Drive storage.
         </p>
+
+        <section className="mt-8 border border-foreground/10 p-5">
+          <h2 className="text-lg font-semibold tracking-normal">
+            User Information
+          </h2>
+          <p className="mt-1 text-sm text-foreground/60">
+            Update the name shown in the navigation and generated records.
+          </p>
+          <AccountForm
+            email={session.user.email ?? ""}
+            name={session.user.name ?? ""}
+          />
+        </section>
 
         <section className="mt-8 border border-foreground/10 p-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -108,12 +121,6 @@ export default async function SettingsPage() {
                 invoice files.
               </p>
             </div>
-            <Link
-              className="inline-flex h-10 items-center rounded-md border border-foreground/20 px-4 text-sm font-medium transition-colors hover:border-foreground/45 hover:bg-foreground/5"
-              href="/dashboard/upload"
-            >
-              Upload Receipts
-            </Link>
           </div>
 
           <dl className="mt-5 grid gap-4 text-sm md:grid-cols-2">
@@ -155,18 +162,6 @@ export default async function SettingsPage() {
           </div>
         </section>
 
-        <section className="mt-6 border border-foreground/10 p-5">
-          <h2 className="text-lg font-semibold tracking-normal">Categories</h2>
-          <p className="mt-1 text-sm text-foreground/60">
-            Manage receipt and invoice category lists for this user database.
-          </p>
-          <Link
-            className="mt-4 inline-flex h-10 items-center rounded-md bg-foreground px-4 text-sm font-medium text-background transition-opacity hover:opacity-85"
-            href="/dashboard/settings/categories"
-          >
-            Open Categories
-          </Link>
-        </section>
       </div>
     </main>
   );

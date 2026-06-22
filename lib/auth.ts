@@ -68,6 +68,8 @@ async function refreshTokenFromUserEmail(token: JWT) {
   }
 
   token.id = Number(appUser.id);
+  token.name = appUser.name;
+  token.email = appUser.email;
   token.supabase_connection_string = appUser.supabase_connection_string;
   token.google_drive_folder_id = appUser.google_drive_folder_id;
   token.is_admin = appUser.is_admin;
@@ -143,6 +145,8 @@ export const authOptions: NextAuthOptions = {
 
         if (appUser) {
           token.id = Number(appUser.id);
+          token.name = appUser.name;
+          token.email = appUser.email;
           token.supabase_connection_string =
             appUser.supabase_connection_string;
           token.google_drive_folder_id = appUser.google_drive_folder_id;
@@ -155,6 +159,8 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id;
+        session.user.name = token.name;
+        session.user.email = token.email;
         session.user.supabase_connection_string =
           token.supabase_connection_string;
         session.user.google_drive_folder_id = token.google_drive_folder_id;
