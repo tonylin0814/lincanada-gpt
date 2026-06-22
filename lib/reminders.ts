@@ -168,49 +168,56 @@ export async function getDashboardReminders(client: Client) {
      LIMIT 5`,
   );
   const upcomingResult = await client.query<Reminder>(
-    `SELECT id,
+    `WITH reminder_occurrences AS (
+       SELECT id,
+              reminder_text,
+              reminder_type,
+              trigger_date,
+              trigger_month,
+              trigger_day,
+              is_recurring,
+              recurrence_pattern,
+              is_active,
+              created_at,
+              CASE
+                WHEN trigger_date IS NOT NULL THEN trigger_date
+                WHEN is_recurring = TRUE
+                  AND trigger_month IS NOT NULL
+                  AND trigger_day IS NOT NULL
+                THEN CASE
+                  WHEN make_date(
+                    EXTRACT(YEAR FROM CURRENT_DATE)::int,
+                    trigger_month,
+                    trigger_day
+                  ) > CURRENT_DATE THEN make_date(
+                    EXTRACT(YEAR FROM CURRENT_DATE)::int,
+                    trigger_month,
+                    trigger_day
+                  )
+                  ELSE make_date(
+                    EXTRACT(YEAR FROM CURRENT_DATE)::int + 1,
+                    trigger_month,
+                    trigger_day
+                  )
+                END
+                ELSE NULL
+              END AS next_reminder_date
+       FROM reminders
+       WHERE is_active IS DISTINCT FROM FALSE
+     )
+     SELECT id,
             reminder_text,
             reminder_type,
-            COALESCE(
-              trigger_date,
-              CASE
-                WHEN make_date(
-                  EXTRACT(YEAR FROM CURRENT_DATE)::int,
-                  trigger_month,
-                  trigger_day
-                ) > CURRENT_DATE THEN make_date(
-                  EXTRACT(YEAR FROM CURRENT_DATE)::int,
-                  trigger_month,
-                  trigger_day
-                )
-                ELSE make_date(
-                  EXTRACT(YEAR FROM CURRENT_DATE)::int + 1,
-                  trigger_month,
-                  trigger_day
-                )
-              END
-            ) AS trigger_date,
+            next_reminder_date AS trigger_date,
             trigger_month,
             trigger_day,
             is_recurring,
             recurrence_pattern,
             is_active,
             created_at
-     FROM reminders
-     WHERE is_active IS DISTINCT FROM FALSE
-       AND (
-         trigger_date > CURRENT_DATE
-         OR (
-           is_recurring = TRUE
-           AND trigger_month IS NOT NULL
-           AND trigger_day IS NOT NULL
-           AND NOT (
-             trigger_month = EXTRACT(MONTH FROM CURRENT_DATE)::int
-             AND trigger_day = EXTRACT(DAY FROM CURRENT_DATE)::int
-           )
-         )
-       )
-     ORDER BY trigger_date ASC NULLS LAST, created_at DESC
+     FROM reminder_occurrences
+     WHERE next_reminder_date > CURRENT_DATE
+     ORDER BY next_reminder_date ASC, created_at DESC
      LIMIT 5`,
   );
 
