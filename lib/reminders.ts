@@ -85,6 +85,52 @@ export async function createReminder(client: Client, input: ReminderInput) {
   return result.rows[0];
 }
 
+export async function updateReminder(
+  client: Client,
+  id: number,
+  input: ReminderInput,
+) {
+  await ensureRemindersTable(client);
+  const result = await client.query<Reminder>(
+    `UPDATE reminders
+     SET reminder_text = $2,
+         trigger_date = $3,
+         trigger_month = NULL,
+         trigger_day = NULL,
+         is_recurring = FALSE,
+         recurrence_pattern = NULL
+     WHERE id = $1
+       AND is_active IS DISTINCT FROM FALSE
+     RETURNING id,
+               reminder_text,
+               reminder_type,
+               trigger_date,
+               trigger_month,
+               trigger_day,
+               is_recurring,
+               recurrence_pattern,
+               is_active,
+               created_at`,
+    [id, input.reminder_text, input.trigger_date],
+  );
+
+  return result.rows[0] ?? null;
+}
+
+export async function deleteReminder(client: Client, id: number) {
+  await ensureRemindersTable(client);
+  const result = await client.query<{ id: number }>(
+    `UPDATE reminders
+     SET is_active = FALSE
+     WHERE id = $1
+       AND is_active IS DISTINCT FROM FALSE
+     RETURNING id`,
+    [id],
+  );
+
+  return (result.rowCount ?? 0) > 0;
+}
+
 export async function getDashboardReminders(client: Client) {
   await ensureRemindersTable(client);
   const todayResult = await client.query<Reminder>(

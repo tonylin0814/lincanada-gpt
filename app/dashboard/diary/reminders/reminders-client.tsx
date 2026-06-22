@@ -113,6 +113,12 @@ export function RemindersClient({ reminders }: RemindersClientProps) {
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editText, setEditText] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ReminderItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const reminderMap = useMemo(() => {
     const map = new Map<string, ReminderItem[]>();
 
@@ -178,6 +184,80 @@ export function RemindersClient({ reminders }: RemindersClientProps) {
 
     form.reset();
     setStatus("Reminder saved.");
+    router.refresh();
+  }
+
+  function startEdit(reminder: ReminderItem) {
+    setError("");
+    setStatus("");
+    setEditingId(reminder.id);
+    setEditText(reminder.reminder_text);
+    setEditDate(reminder.trigger_date?.slice(0, 10) ?? selectedDate);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditText("");
+    setEditDate("");
+  }
+
+  async function saveEdit(reminder: ReminderItem) {
+    setError("");
+    setStatus("");
+
+    if (!editText.trim() || !editDate) {
+      setError("Reminder and date are required.");
+      return;
+    }
+
+    setIsUpdating(true);
+    const response = await fetch("/api/reminders", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: reminder.id,
+        reminder_text: editText.trim(),
+        trigger_date: editDate,
+      }),
+    });
+    setIsUpdating(false);
+
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      setError(body?.error ?? "Could not update reminder.");
+      return;
+    }
+
+    cancelEdit();
+    setStatus("Reminder updated.");
+    router.refresh();
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) {
+      return;
+    }
+
+    setError("");
+    setStatus("");
+    setIsDeleting(true);
+    const response = await fetch(`/api/reminders?id=${deleteTarget.id}`, {
+      method: "DELETE",
+    });
+    setIsDeleting(false);
+
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      setError(body?.error ?? "Could not delete reminder.");
+      return;
+    }
+
+    setDeleteTarget(null);
+    setStatus("Reminder deleted.");
     router.refresh();
   }
 
@@ -309,15 +389,74 @@ export function RemindersClient({ reminders }: RemindersClientProps) {
                 className="rounded-md border border-foreground/10 p-4"
                 key={reminder.id}
               >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <p className="font-medium">{reminder.reminder_text}</p>
-                  <span className="rounded-md border border-green-700 px-2 py-1 text-xs font-medium text-green-800">
-                    {getReminderStatus(reminder)}
-                  </span>
-                </div>
-                <p className="mt-2 text-sm text-foreground/60">
-                  {formatReminderDate(reminder)}
-                </p>
+                {editingId === reminder.id ? (
+                  <div className="grid gap-3">
+                    <label className="block text-sm">
+                      Date
+                      <input
+                        className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3"
+                        onChange={(event) => setEditDate(event.currentTarget.value)}
+                        type="date"
+                        value={editDate}
+                      />
+                    </label>
+                    <label className="block text-sm">
+                      Reminder
+                      <textarea
+                        className="mt-2 min-h-20 w-full rounded-md border border-foreground/20 bg-background px-3 py-2"
+                        onChange={(event) => setEditText(event.currentTarget.value)}
+                        value={editText}
+                      />
+                    </label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        className="h-9 rounded-md bg-green-700 px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isUpdating}
+                        onClick={() => saveEdit(reminder)}
+                        type="button"
+                      >
+                        {isUpdating ? "Saving..." : "Save"}
+                      </button>
+                      <button
+                        className="h-9 rounded-md border border-foreground/20 px-3 text-sm font-medium hover:border-foreground/45 hover:bg-foreground/5"
+                        onClick={cancelEdit}
+                        type="button"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium">{reminder.reminder_text}</p>
+                        <p className="mt-2 text-sm text-foreground/60">
+                          {formatReminderDate(reminder)}
+                        </p>
+                      </div>
+                      <span className="rounded-md border border-green-700 px-2 py-1 text-xs font-medium text-green-800">
+                        {getReminderStatus(reminder)}
+                      </span>
+                    </div>
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <button
+                        className="h-9 rounded-md border border-foreground/20 px-3 text-sm font-medium hover:border-green-700 hover:bg-green-50 hover:text-green-800"
+                        onClick={() => startEdit(reminder)}
+                        type="button"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="h-9 rounded-md border border-red-200 px-3 text-sm font-medium text-red-700 hover:border-red-700 hover:bg-red-50"
+                        onClick={() => setDeleteTarget(reminder)}
+                        type="button"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </>
+                )}
               </article>
             ))
           ) : (
@@ -327,6 +466,49 @@ export function RemindersClient({ reminders }: RemindersClientProps) {
           )}
         </div>
       </section>
+
+      {deleteTarget ? (
+        <div
+          aria-labelledby="delete-reminder-title"
+          aria-modal="true"
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/35 px-4"
+          role="dialog"
+        >
+          <div className="w-full max-w-md rounded-md border border-foreground/10 bg-background p-5 shadow-2xl">
+            <h3
+              className="text-lg font-semibold tracking-normal"
+              id="delete-reminder-title"
+            >
+              Delete Reminder
+            </h3>
+            <p className="mt-3 text-sm text-foreground/70">
+              Delete this reminder? This will remove it from the active reminder
+              list.
+            </p>
+            <div className="mt-4 rounded-md border border-foreground/10 bg-foreground/5 p-3 text-sm">
+              {deleteTarget.reminder_text}
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                className="h-10 rounded-md border border-foreground/20 px-4 text-sm font-medium hover:border-foreground/45 hover:bg-foreground/5"
+                disabled={isDeleting}
+                onClick={() => setDeleteTarget(null)}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="h-10 rounded-md bg-red-700 px-4 text-sm font-medium text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isDeleting}
+                onClick={confirmDelete}
+                type="button"
+              >
+                {isDeleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
