@@ -37,57 +37,99 @@ function buildHref(path: string, params: Record<string, string | number | null>)
   return `${path}${queryString ? `?${queryString}` : ""}`;
 }
 
-function SectionLinks({
+function FinanceActionLinks({
   entityId,
-  kind,
+  showExpense,
+  showRevenue,
 }: {
   entityId: number | null;
-  kind: "expense" | "revenue";
+  showExpense: boolean;
+  showRevenue: boolean;
 }) {
-  const isExpense = kind === "expense";
-  const tab = isExpense ? "receipts" : "invoices";
-  const mode = isExpense ? "expense" : "revenue";
-
   return (
     <div className="mt-2 grid gap-1">
-      <Link
-        className={menuItemClass}
-        href={buildHref("/dashboard/records", { tab, entity_id: entityId })}
-      >
-        {isExpense ? "Expense Records" : "Revenue Records"}
-      </Link>
-      <Link
-        className={menuItemClass}
-        href={buildHref("/dashboard/upload", { mode, entity_id: entityId })}
-      >
-        {isExpense ? "Upload Receipts" : "Upload Invoices"}
-      </Link>
-      <Link
-        className={menuItemClass}
-        href={buildHref("/dashboard/reports", { type: kind, entity_id: entityId })}
-      >
-        {isExpense ? "Expense Reports" : "Revenue Reports"}
-      </Link>
+      {showExpense ? (
+        <>
+          <Link
+            className={menuItemClass}
+            href={buildHref("/dashboard/records", {
+              entity_id: entityId,
+              tab: "receipts",
+            })}
+          >
+            Expense Records
+          </Link>
+          <Link
+            className={menuItemClass}
+            href={buildHref("/dashboard/upload", {
+              entity_id: entityId,
+              mode: "expense",
+            })}
+          >
+            Upload Receipts
+          </Link>
+          <Link
+            className={menuItemClass}
+            href={buildHref("/dashboard/reports", {
+              entity_id: entityId,
+              type: "expense",
+            })}
+          >
+            Expense Reports
+          </Link>
+        </>
+      ) : null}
+      {showRevenue ? (
+        <>
+          <Link
+            className={menuItemClass}
+            href={buildHref("/dashboard/records", {
+              entity_id: entityId,
+              tab: "invoices",
+            })}
+          >
+            Revenue Records
+          </Link>
+          <Link
+            className={menuItemClass}
+            href={buildHref("/dashboard/upload", {
+              entity_id: entityId,
+              mode: "revenue",
+            })}
+          >
+            Upload Invoices
+          </Link>
+          <Link
+            className={menuItemClass}
+            href={buildHref("/dashboard/reports", {
+              entity_id: entityId,
+              type: "revenue",
+            })}
+          >
+            Revenue Reports
+          </Link>
+        </>
+      ) : null}
     </div>
   );
 }
 
 function FinanceMenu({
-  title,
   entities,
   selectedCompanyId,
   onCompanyChange,
-  kind,
-  showPersonal,
-  showCompany,
+  showCompanyExpense,
+  showCompanyRevenue,
+  showPersonalExpense,
+  showPersonalRevenue,
 }: {
-  title: string;
   entities: NavigationEntity[];
   selectedCompanyId: number | null;
   onCompanyChange: (id: number) => void;
-  kind: "expense" | "revenue";
-  showPersonal: boolean;
-  showCompany: boolean;
+  showCompanyExpense: boolean;
+  showCompanyRevenue: boolean;
+  showPersonalExpense: boolean;
+  showPersonalRevenue: boolean;
 }) {
   const personalEntity = entities.find((entity) => entity.type === "personal");
   const companyEntities = entities.filter((entity) => entity.type === "company");
@@ -95,6 +137,8 @@ function FinanceMenu({
     companyEntities.find((entity) => entity.id === selectedCompanyId) ??
     companyEntities[0] ??
     null;
+  const showPersonal = showPersonalExpense || showPersonalRevenue;
+  const showCompany = showCompanyExpense || showCompanyRevenue;
 
   return (
     <div className="group relative">
@@ -102,7 +146,7 @@ function FinanceMenu({
         className="h-9 rounded-md px-2 text-foreground/75 group-hover:bg-foreground/5 group-hover:text-foreground hover:bg-foreground/5 hover:text-foreground"
         type="button"
       >
-        {title}
+        Finance
       </button>
       <div className="invisible absolute left-0 top-full z-50 w-72 rounded-md border border-foreground/10 bg-background p-3 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
         {showPersonal ? (
@@ -110,7 +154,11 @@ function FinanceMenu({
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">
               Personal
             </p>
-            <SectionLinks entityId={personalEntity?.id ?? null} kind={kind} />
+            <FinanceActionLinks
+              entityId={personalEntity?.id ?? null}
+              showExpense={showPersonalExpense}
+              showRevenue={showPersonalRevenue}
+            />
           </div>
         ) : null}
 
@@ -134,9 +182,35 @@ function FinanceMenu({
                 ))}
               </select>
             </label>
-            <SectionLinks entityId={activeCompany?.id ?? null} kind={kind} />
+            <FinanceActionLinks
+              entityId={activeCompany?.id ?? null}
+              showExpense={showCompanyExpense}
+              showRevenue={showCompanyRevenue}
+            />
           </div>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+function HealthMenu({ showBloodPressure }: { showBloodPressure: boolean }) {
+  if (!showBloodPressure) {
+    return null;
+  }
+
+  return (
+    <div className="group relative">
+      <button
+        className="h-9 rounded-md px-2 text-foreground/75 group-hover:bg-foreground/5 group-hover:text-foreground hover:bg-foreground/5 hover:text-foreground"
+        type="button"
+      >
+        Health
+      </button>
+      <div className="invisible absolute left-0 top-full z-50 w-64 rounded-md border border-foreground/10 bg-background p-3 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
+        <Link className={menuItemClass} href="/dashboard/health/blood-pressure">
+          Blood Pressure
+        </Link>
       </div>
     </div>
   );
@@ -197,8 +271,11 @@ export function DashboardNavigation({
   }
 
   const hasFeature = (featureKey: string) => enabledFeatures.includes(featureKey);
-  const showExpense = hasFeature("personal_expense") || hasFeature("company_expense");
-  const showRevenue = hasFeature("personal_revenue") || hasFeature("company_revenue");
+  const showFinance =
+    hasFeature("personal_expense") ||
+    hasFeature("personal_revenue") ||
+    hasFeature("company_expense") ||
+    hasFeature("company_revenue");
 
   return (
     <nav className="mx-auto flex max-w-6xl items-center gap-4">
@@ -212,36 +289,18 @@ export function DashboardNavigation({
         />
         Lin System
       </Link>
-      {showExpense ? (
+      {showFinance ? (
         <FinanceMenu
           entities={entities}
-          kind="expense"
           onCompanyChange={changeCompany}
           selectedCompanyId={selectedCompanyId}
-          showCompany={hasFeature("company_expense")}
-          showPersonal={hasFeature("personal_expense")}
-          title="Expense"
+          showCompanyExpense={hasFeature("company_expense")}
+          showCompanyRevenue={hasFeature("company_revenue")}
+          showPersonalExpense={hasFeature("personal_expense")}
+          showPersonalRevenue={hasFeature("personal_revenue")}
         />
       ) : null}
-      {showRevenue ? (
-        <FinanceMenu
-          entities={entities}
-          kind="revenue"
-          onCompanyChange={changeCompany}
-          selectedCompanyId={selectedCompanyId}
-          showCompany={hasFeature("company_revenue")}
-          showPersonal={hasFeature("personal_revenue")}
-          title="Revenue"
-        />
-      ) : null}
-      {hasFeature("blood_pressure") ? (
-        <Link
-          className="text-foreground/75 hover:text-foreground"
-          href="/dashboard/health/blood-pressure"
-        >
-          Blood Pressure
-        </Link>
-      ) : null}
+      <HealthMenu showBloodPressure={hasFeature("blood_pressure")} />
       <Link className="text-foreground/75 hover:text-foreground" href="/dashboard/categories">
         Categories
       </Link>
