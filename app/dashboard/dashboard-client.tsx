@@ -191,7 +191,7 @@ function BloodPressureBlock({
       : "--";
 
   return (
-    <div className="rounded-md border-2 border-pink-500 p-4">
+    <div className="rounded-md border border-foreground/10 p-4">
       <h3 className="text-lg font-semibold tracking-normal">Blood Pressure</h3>
       <div className="mt-4 grid gap-5 md:grid-cols-3">
         <section className="rounded-md border border-foreground/10 p-5">
@@ -240,7 +240,7 @@ function WeightBlock({
   summary: WeightSummary;
 }) {
   return (
-    <div className="rounded-md border-2 border-green-600 p-4">
+    <div className="rounded-md border border-foreground/10 p-4">
       <h3 className="text-lg font-semibold tracking-normal">Weight</h3>
       <div className="mt-4 grid gap-5 md:grid-cols-3">
         <section className="rounded-md border border-foreground/10 p-5">
@@ -484,7 +484,7 @@ export function DashboardClient({
               Health records and personal measurements.
             </p>
           </div>
-          <div className="grid gap-5">
+          <div className="grid gap-5 rounded-md border-2 border-pink-500 p-4">
             {bloodPressureSummary ? (
               <BloodPressureBlock summary={bloodPressureSummary} />
             ) : null}
