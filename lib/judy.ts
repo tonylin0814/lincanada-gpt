@@ -23,6 +23,20 @@ type LatestExpenseRow = {
   people_names: string | null;
 };
 
+type MealReceiptRow = {
+  record_r_number: string;
+  vendor: string;
+  receipt_date: string;
+  category: string;
+  grand_total: string | number | null;
+  currency: string;
+  place_name: string | null;
+  place_address: string | null;
+  item_name: string | null;
+  item_qty: string | number | null;
+  item_total_price: string | number | null;
+};
+
 type JudyDatabaseHealth = {
   connected: boolean;
   tables: Record<string, boolean>;
@@ -600,6 +614,48 @@ function wantsLatestExpense(message: string) {
     /\b(spending|expense|purchase|receipt|spent)\b/i.test(message);
 }
 
+function getRequestedMealDate(message: string) {
+  const timeContext = getJudyTimeContext();
+  const mentionsMeal =
+    /(吃|饭|餐|restaurant|meal|eat|ate|food|lunch|dinner|breakfast)/i.test(
+      message,
+    );
+
+  if (!mentionsMeal) {
+    return null;
+  }
+
+  if (/(昨天|yesterday)/i.test(message)) {
+    return {
+      date: timeContext.yesterday,
+      labelZh: "昨天",
+      labelEn: "yesterday",
+    };
+  }
+
+  if (/(今天|today)/i.test(message)) {
+    return {
+      date: timeContext.today,
+      labelZh: "今天",
+      labelEn: "today",
+    };
+  }
+
+  if (/(明天|tomorrow)/i.test(message)) {
+    return {
+      date: timeContext.tomorrow,
+      labelZh: "明天",
+      labelEn: "tomorrow",
+    };
+  }
+
+  return null;
+}
+
+function isChineseText(message: string) {
+  return /[\u3400-\u9fff]/.test(message);
+}
+
 function formatDisplayDate(value: string | Date) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -625,6 +681,171 @@ function formatDisplayMoney(value: string | number | null, currency: string) {
   }
 
   return `$${amount.toFixed(2)} ${currency}`;
+}
+
+function formatQuantity(value: string | number | null) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  const quantity = Number(value);
+  if (Number.isNaN(quantity)) {
+    return String(value);
+  }
+
+  return Number.isInteger(quantity) ? String(quantity) : String(quantity);
+}
+
+async function answerMealByDate(
+  client: Client,
+  request: { date: string; labelZh: string; labelEn: string },
+  language: "zh" | "en",
+): Promise<JudyAnswer> {
+  await client.query("BEGIN READ ONLY");
+  try {
+    await client.query("SET LOCAL statement_timeout = '5000ms'");
+    const result = await client.query<MealReceiptRow>(
+      `
+        SELECT
+          r.record_r_number,
+          r.vendor,
+          r.receipt_date,
+          r.category,
+          r.grand_total,
+          r.currency,
+          p.canonical_name AS place_name,
+          p.address AS place_address,
+          ri.item_name,
+          ri.item_qty,
+          ri.item_total_price
+        FROM receipts r
+        LEFT JOIN places p ON p.id = r.place_id
+        LEFT JOIN receipt_items ri ON ri.record_r_number = r.record_r_number
+        WHERE r.receipt_date = $1
+          AND (
+            lower(r.category) LIKE '%restaurant%'
+            OR lower(r.category) LIKE '%meal%'
+            OR lower(r.category) LIKE '%food%'
+            OR ri.record_r_number IS NOT NULL
+          )
+        ORDER BY r.receipt_time ASC NULLS LAST, r.created_at ASC, ri.id ASC
+      `,
+      [request.date],
+    );
+    await client.query("COMMIT");
+
+    if (result.rows.length === 0) {
+      return {
+        answer:
+          language === "zh"
+            ? `我没有看到${request.labelZh}的餐饮记录。`
+            : `I do not see any meal records for ${request.labelEn}.`,
+      };
+    }
+
+    const receipts = new Map<
+      string,
+      {
+        vendor: string;
+        receiptDate: string;
+        category: string;
+        total: string | number | null;
+        currency: string;
+        place: string;
+        items: MealReceiptRow[];
+      }
+    >();
+
+    result.rows.forEach((row) => {
+      const existing = receipts.get(row.record_r_number);
+      const place = row.place_name
+        ? row.place_address
+          ? `${row.place_name}, ${row.place_address}`
+          : row.place_name
+        : row.vendor;
+
+      if (!existing) {
+        receipts.set(row.record_r_number, {
+          vendor: row.vendor,
+          receiptDate: row.receipt_date,
+          category: row.category,
+          total: row.grand_total,
+          currency: row.currency,
+          place,
+          items: row.item_name ? [row] : [],
+        });
+      } else if (row.item_name) {
+        existing.items.push(row);
+      }
+    });
+
+    if (language === "zh") {
+      const sections = Array.from(receipts.values()).map((receipt) => {
+        const itemLines =
+          receipt.items.length > 0
+            ? receipt.items
+                .map((item) => {
+                  const quantity = formatQuantity(item.item_qty);
+                  const total = formatDisplayMoney(
+                    item.item_total_price,
+                    receipt.currency,
+                  );
+                  return quantity
+                    ? `- ${item.item_name}：${quantity} 份，${total}`
+                    : `- ${item.item_name}：${total}`;
+                })
+                .join("\n")
+            : "- 没有看到具体菜品明细";
+
+        return `地点：${receipt.vendor}
+日期：${formatDisplayDate(receipt.receiptDate)}
+分类：${receipt.category}
+总金额：${formatDisplayMoney(receipt.total, receipt.currency)}
+吃了：
+${itemLines}`;
+      });
+
+      return {
+        answer: `你${request.labelZh}的餐饮记录如下：\n\n${sections.join(
+          "\n\n",
+        )}`,
+      };
+    }
+
+    const sections = Array.from(receipts.values()).map((receipt) => {
+      const itemLines =
+        receipt.items.length > 0
+          ? receipt.items
+              .map((item) => {
+                const quantity = formatQuantity(item.item_qty);
+                const total = formatDisplayMoney(
+                  item.item_total_price,
+                  receipt.currency,
+                );
+                return quantity
+                  ? `- ${item.item_name}: ${quantity} order(s), ${total}`
+                  : `- ${item.item_name}: ${total}`;
+              })
+              .join("\n")
+          : "- I do not see item details for this receipt.";
+
+      return `Place: ${receipt.vendor}
+Date: ${formatDisplayDate(receipt.receiptDate)}
+Category: ${receipt.category}
+Total: ${formatDisplayMoney(receipt.total, receipt.currency)}
+Items:
+${itemLines}`;
+    });
+
+    return {
+      answer: `Here are your meal records for ${request.labelEn}:\n\n${sections.join(
+        "\n\n",
+      )}`,
+    };
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  }
 }
 
 async function answerLatestExpense(client: Client): Promise<JudyAnswer> {
@@ -798,6 +1019,18 @@ export async function askJudy(
 
   if (latestUserMessage && wantsLatestExpense(latestUserMessage.text)) {
     return answerLatestExpense(client);
+  }
+
+  const requestedMealDate = latestUserMessage
+    ? getRequestedMealDate(latestUserMessage.text)
+    : null;
+
+  if (latestUserMessage && requestedMealDate) {
+    return answerMealByDate(
+      client,
+      requestedMealDate,
+      isChineseText(latestUserMessage.text) ? "zh" : "en",
+    );
   }
 
   const openai = getOpenAI();
