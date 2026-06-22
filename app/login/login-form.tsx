@@ -11,6 +11,7 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -32,6 +33,14 @@ export function LoginForm() {
 
     router.push(searchParams.get("callbackUrl") ?? "/dashboard");
     router.refresh();
+  }
+
+  async function handleGoogleSignIn() {
+    setError("");
+    setIsGoogleSubmitting(true);
+    await signIn("google", {
+      callbackUrl: searchParams.get("callbackUrl") ?? "/dashboard",
+    });
   }
 
   return (
@@ -66,10 +75,23 @@ export function LoginForm() {
       {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
       <button
         className="mt-6 h-11 w-full rounded-md bg-foreground px-4 text-sm font-medium text-background transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-60"
-        disabled={isSubmitting}
+        disabled={isSubmitting || isGoogleSubmitting}
         type="submit"
       >
         {isSubmitting ? "Signing in..." : "Sign in"}
+      </button>
+      <div className="my-5 flex items-center gap-3 text-xs uppercase tracking-wide text-foreground/45">
+        <span className="h-px flex-1 bg-foreground/15" />
+        or
+        <span className="h-px flex-1 bg-foreground/15" />
+      </div>
+      <button
+        className="inline-flex h-11 w-full items-center justify-center rounded-md border border-foreground/20 bg-background px-4 text-sm font-medium text-foreground transition-colors hover:border-foreground/45 hover:bg-foreground/5 disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={isSubmitting || isGoogleSubmitting}
+        onClick={handleGoogleSignIn}
+        type="button"
+      >
+        {isGoogleSubmitting ? "Opening Google..." : "Continue with Google"}
       </button>
     </form>
   );

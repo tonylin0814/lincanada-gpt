@@ -61,6 +61,29 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
+  if (!session.user.supabase_connection_string) {
+    return (
+      <main className="min-h-screen bg-background px-6 py-10 text-foreground">
+        <div className="mx-auto max-w-4xl">
+          <section className="border border-foreground/10 p-5">
+            <h1 className="text-2xl font-semibold tracking-normal">
+              Account Created
+            </h1>
+            <p className="mt-3 text-sm text-foreground/65">
+              Your Google account is registered. This user still needs a
+              Supabase database connection before records, uploads, and reports
+              can be used.
+            </p>
+            <p className="mt-4 text-sm font-medium">
+              Ask an admin to add the Supabase connection string for{" "}
+              {session.user.email}.
+            </p>
+          </section>
+        </div>
+      </main>
+    );
+  }
+
   const year = new Date().getFullYear();
   const client = await getUserDb(session.user.supabase_connection_string);
 
