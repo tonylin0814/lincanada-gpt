@@ -3,7 +3,7 @@ import { getCurrentSession } from "@/lib/auth";
 import { getUserDb } from "@/lib/db";
 import type { ExtractedExif } from "@/lib/exif";
 import { matchReceipt } from "@/lib/matcher";
-import type { ReceiptOcrResult } from "@/lib/ocr";
+import { normalizeOcrResult, type ReceiptOcrResult } from "@/lib/ocr";
 
 export const runtime = "nodejs";
 
@@ -29,8 +29,9 @@ export async function POST(request: Request) {
   const client = await getUserDb(session.user.supabase_connection_string);
 
   try {
-    const match_result = await matchReceipt(client, body.exif, body.ocr);
-    return NextResponse.json({ match_result });
+    const ocr = normalizeOcrResult(body.ocr);
+    const match_result = await matchReceipt(client, body.exif, ocr);
+    return NextResponse.json({ match_result, ocr });
   } finally {
     await client.end();
   }

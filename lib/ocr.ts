@@ -47,7 +47,7 @@ function getOpenAI() {
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 }
 
-function normalizeOcrResult(value: Partial<ReceiptOcrResult>): ReceiptOcrResult {
+export function normalizeOcrResult(value: Partial<ReceiptOcrResult>): ReceiptOcrResult {
   return {
     ...emptyResult,
     ...value,
@@ -56,7 +56,7 @@ function normalizeOcrResult(value: Partial<ReceiptOcrResult>): ReceiptOcrResult 
   };
 }
 
-function normalizeDateString(value: string | null | undefined) {
+export function normalizeDateString(value: string | null | undefined) {
   if (!value) return null;
 
   const trimmed = String(value).trim();

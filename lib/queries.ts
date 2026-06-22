@@ -1,4 +1,5 @@
 import type { Client } from "pg";
+import { normalizeDateString } from "@/lib/ocr";
 import type {
   Entity,
   Invoice,
@@ -656,7 +657,7 @@ export async function updateReceiptForReview(
         record_r_number,
         input.vendor,
         input.vendor_address,
-        input.receipt_date,
+        normalizeDateString(input.receipt_date) ?? input.receipt_date,
         input.receipt_time,
         input.category,
         input.subtotal,
@@ -786,7 +787,7 @@ export async function updateInvoiceForReview(
       [
         record_i_number,
         input.buyer_name,
-        input.invoice_date,
+        normalizeDateString(input.invoice_date) ?? input.invoice_date,
         input.category,
         input.subtotal,
         JSON.stringify(input.taxes),

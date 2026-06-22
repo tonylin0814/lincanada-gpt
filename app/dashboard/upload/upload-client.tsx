@@ -310,8 +310,12 @@ export function UploadClient({
       return;
     }
 
-    const body = (await response.json()) as { match_result: MatchResult };
+    const body = (await response.json()) as {
+      match_result: MatchResult;
+      ocr?: ReceiptOcrResult;
+    };
     updateUpload(upload.id, {
+      ocr: body.ocr ?? nextOcr,
       match_result: body.match_result,
       selected_record_r_number:
         body.match_result.match?.record_r_number ??
