@@ -23,6 +23,20 @@ type LatestExpenseRow = {
   people_names: string | null;
 };
 
+type JudyDatabaseHealth = {
+  connected: boolean;
+  tables: Record<string, boolean>;
+  receipt_count: number | null;
+  latest_receipt: {
+    record_number: string;
+    vendor: string;
+    receipt_date: string;
+    total: string | number | null;
+    currency: string;
+  } | null;
+  error?: string;
+};
+
 const judyModel = process.env.OPENAI_JUDY_MODEL || "gpt-5.4-mini";
 const maxRows = 100;
 
@@ -601,6 +615,89 @@ async function answerLatestExpense(client: Client): Promise<JudyAnswer> {
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
     throw error;
+  }
+}
+
+export async function checkJudyDatabaseHealth(
+  client: Client,
+): Promise<JudyDatabaseHealth> {
+  const expectedTables = [
+    "receipts",
+    "places",
+    "event_receipts",
+    "event_people",
+    "people",
+  ];
+
+  try {
+    const tableResult = await client.query<Record<string, string | null>>(
+      `
+        SELECT
+          to_regclass('public.receipts')::text AS receipts,
+          to_regclass('public.places')::text AS places,
+          to_regclass('public.event_receipts')::text AS event_receipts,
+          to_regclass('public.event_people')::text AS event_people,
+          to_regclass('public.people')::text AS people
+      `,
+    );
+    const tableRow = tableResult.rows[0] ?? {};
+    const tables = Object.fromEntries(
+      expectedTables.map((tableName) => [tableName, Boolean(tableRow[tableName])]),
+    );
+
+    if (!tables.receipts) {
+      return {
+        connected: true,
+        tables,
+        receipt_count: null,
+        latest_receipt: null,
+        error: "The receipts table was not found.",
+      };
+    }
+
+    const receiptCountResult = await client.query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM receipts",
+    );
+    const latestResult = await client.query<{
+      record_r_number: string;
+      vendor: string;
+      receipt_date: string;
+      grand_total: string | number | null;
+      currency: string;
+    }>(
+      `
+        SELECT record_r_number, vendor, receipt_date, grand_total, currency
+        FROM receipts
+        ORDER BY receipt_date DESC, receipt_time DESC NULLS LAST, created_at DESC
+        LIMIT 1
+      `,
+    );
+    const latest = latestResult.rows[0] ?? null;
+
+    return {
+      connected: true,
+      tables,
+      receipt_count: Number(receiptCountResult.rows[0]?.count ?? 0),
+      latest_receipt: latest
+        ? {
+            record_number: latest.record_r_number,
+            vendor: latest.vendor,
+            receipt_date: latest.receipt_date,
+            total: latest.grand_total,
+            currency: latest.currency,
+          }
+        : null,
+    };
+  } catch (error) {
+    return {
+      connected: false,
+      tables: Object.fromEntries(
+        expectedTables.map((tableName) => [tableName, false]),
+      ),
+      receipt_count: null,
+      latest_receipt: null,
+      error: error instanceof Error ? error.message : "Unknown database error.",
+    };
   }
 }
 
