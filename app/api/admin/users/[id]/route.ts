@@ -5,6 +5,7 @@ import {
   type UpdateAdminUserInput,
 } from "@/lib/admin-users";
 import { getCurrentSession } from "@/lib/auth";
+import { initializeUserDatabase } from "@/lib/user-database-setup";
 
 type RouteContext = {
   params: {
@@ -38,9 +39,36 @@ export async function PUT(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: "Invalid user id." }, { status: 400 });
   }
 
-  const body = (await request.json()) as Partial<UpdateAdminUserInput>;
+  const body = (await request.json()) as Partial<UpdateAdminUserInput> & {
+    initialize_database?: boolean;
+  };
+
+  const supabaseConnectionString =
+    typeof body.supabase_connection_string === "string"
+      ? body.supabase_connection_string.trim()
+      : "";
+
+  if (body.initialize_database) {
+    if (!supabaseConnectionString) {
+      return NextResponse.json(
+        { error: "Supabase connection string is required to initialize." },
+        { status: 400 },
+      );
+    }
+
+    try {
+      await initializeUserDatabase(supabaseConnectionString);
+    } catch (error) {
+      console.error("Could not initialize user database:", error);
+      return NextResponse.json(
+        { error: "Could not initialize the user's Supabase database." },
+        { status: 500 },
+      );
+    }
+  }
+
   const user = await updateWebAppUser(id, {
-    supabase_connection_string: body.supabase_connection_string,
+    supabase_connection_string: supabaseConnectionString,
     google_drive_folder_id: body.google_drive_folder_id || null,
   });
 

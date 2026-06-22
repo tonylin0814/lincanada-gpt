@@ -21,8 +21,8 @@ export default async function AdminPage() {
               User Management
             </h1>
             <p className="mt-2 text-sm text-foreground/65">
-              Each user signs in here and connects to their own Supabase
-              database.
+              New registered users appear as pending until an admin connects
+              and initializes their Supabase database.
             </p>
           </div>
           <Link
@@ -54,7 +54,7 @@ export default async function AdminPage() {
                     {user.is_active ? "Active" : "Inactive"}
                   </td>
                   <td className="px-4 py-3">
-                    {user.has_supabase_connection ? "Connected" : "Missing"}
+                    {user.has_supabase_connection ? "Connected" : "Pending Setup"}
                   </td>
                   <td className="px-4 py-3">
                     {new Date(user.created_at).toLocaleDateString()}
