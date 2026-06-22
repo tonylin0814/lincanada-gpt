@@ -6,6 +6,7 @@ import {
   countUnreadAdminNotifications,
   listUnreadAdminNotifications,
 } from "@/lib/features";
+import { ReadAllNotificationsButton } from "./read-all-notifications-button";
 
 type AdminPageProps = {
   searchParams?: {
@@ -177,9 +178,14 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   Unread feature notifications from user data detection.
                 </p>
               </div>
-              <p className="text-sm text-foreground/60">
-                Page {notificationPage} of {notificationTotalPages}
-              </p>
+              <div className="flex items-center gap-3">
+                <p className="text-sm text-foreground/60">
+                  Page {notificationPage} of {notificationTotalPages}
+                </p>
+                <ReadAllNotificationsButton
+                  disabled={notificationTotal === 0}
+                />
+              </div>
             </div>
 
             <div className="mt-4 max-h-[640px] overflow-y-auto rounded-md border border-foreground/10 p-3">

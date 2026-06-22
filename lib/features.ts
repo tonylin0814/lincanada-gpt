@@ -572,3 +572,17 @@ export async function countUnreadAdminNotifications() {
 
   return Number(result.rows[0]?.count ?? 0);
 }
+
+export async function markAllAdminNotificationsRead() {
+  await ensureFeatureTables();
+  const db = getWebAppDb();
+  const result = await db.query<{ id: number }>(
+    `UPDATE admin_notifications
+     SET status = 'read',
+         resolved_at = NOW()
+     WHERE status = 'unread'
+     RETURNING id`,
+  );
+
+  return result.rowCount ?? 0;
+}
