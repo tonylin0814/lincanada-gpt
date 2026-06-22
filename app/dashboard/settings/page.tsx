@@ -2,7 +2,7 @@ import { google } from "googleapis";
 import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth";
 import { getWebAppDb } from "@/lib/db";
-import { getGoogleOAuthClient } from "@/lib/drive";
+import { getGoogleOAuthClient, getGoogleTokenExpiryDate } from "@/lib/drive";
 import { AccountForm } from "./account-form";
 import { PasswordForm } from "./password-form";
 
@@ -18,6 +18,37 @@ type FolderInfo = {
   webViewLink: string | null;
   error: string | null;
 };
+
+function getGoogleErrorDetails(error: unknown) {
+  if (!(error instanceof Error)) {
+    return { message: String(error) };
+  }
+
+  const details = error as Error & {
+    code?: unknown;
+    status?: unknown;
+    response?: {
+      status?: unknown;
+      data?: {
+        error?: string;
+        error_description?: string;
+        errorDetails?: Array<{ reason?: string }>;
+      };
+    };
+    errors?: Array<{ reason?: string; message?: string }>;
+  };
+
+  return {
+    message: error.message,
+    code: details.code,
+    status: details.status ?? details.response?.status,
+    reason:
+      details.response?.data?.error ??
+      details.response?.data?.errorDetails?.[0]?.reason ??
+      details.errors?.[0]?.reason,
+    errorDescription: details.response?.data?.error_description,
+  };
+}
 
 async function getGoogleSettings(userId: number) {
   const db = getWebAppDb();
@@ -52,9 +83,7 @@ async function getFolderInfo(settings: GoogleSettingsRow): Promise<FolderInfo> {
     auth.setCredentials({
       access_token: settings.google_access_token ?? undefined,
       refresh_token: settings.google_refresh_token ?? undefined,
-      expiry_date: settings.google_token_expiry
-        ? settings.google_token_expiry.getTime()
-        : undefined,
+      expiry_date: getGoogleTokenExpiryDate(settings.google_token_expiry),
     });
 
     const drive = google.drive({ version: "v3", auth });
@@ -69,7 +98,10 @@ async function getFolderInfo(settings: GoogleSettingsRow): Promise<FolderInfo> {
       error: null,
     };
   } catch (error) {
-    console.error("Could not read Google Drive folder info:", error);
+    console.error(
+      "Could not read Google Drive folder info:",
+      getGoogleErrorDetails(error),
+    );
     return {
       name: null,
       webViewLink: null,

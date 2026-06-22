@@ -2,7 +2,11 @@ import { google } from "googleapis";
 import { NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/auth";
 import { getUserDb, getWebAppDb } from "@/lib/db";
-import { getDriveFileId, getGoogleOAuthClient } from "@/lib/drive";
+import {
+  getDriveFileId,
+  getGoogleOAuthClient,
+  getGoogleTokenExpiryDate,
+} from "@/lib/drive";
 import { getReceiptById, getReceiptItems } from "@/lib/queries";
 import type { Entity, JsonValue, Receipt, ReceiptItem } from "@/types/licanada_gpt";
 
@@ -155,9 +159,7 @@ async function getDriveImageDataUrl(userId: number, fileUrl: string | null) {
       auth.setCredentials({
         access_token: googleUser.google_access_token ?? undefined,
         refresh_token: googleUser.google_refresh_token ?? undefined,
-        expiry_date: googleUser.google_token_expiry
-          ? googleUser.google_token_expiry.getTime()
-          : undefined,
+        expiry_date: getGoogleTokenExpiryDate(googleUser.google_token_expiry),
       });
 
       const drive = google.drive({ version: "v3", auth });

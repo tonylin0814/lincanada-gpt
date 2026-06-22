@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/auth";
 import { getUserDb, getWebAppDb } from "@/lib/db";
-import { deleteFile, getGoogleOAuthClient } from "@/lib/drive";
+import {
+  deleteFile,
+  getGoogleOAuthClient,
+  getGoogleTokenExpiryDate,
+} from "@/lib/drive";
 import {
   getReceiptById,
   getReceiptItems,
@@ -115,9 +119,7 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
         auth.setCredentials({
           access_token: googleUser.google_access_token ?? undefined,
           refresh_token: googleUser.google_refresh_token ?? undefined,
-          expiry_date: googleUser.google_token_expiry
-            ? googleUser.google_token_expiry.getTime()
-            : undefined,
+          expiry_date: getGoogleTokenExpiryDate(googleUser.google_token_expiry),
         });
         await deleteFile(auth, existing.attachment_link).catch((error) => {
           console.error("Could not delete Google Drive receipt:", error);

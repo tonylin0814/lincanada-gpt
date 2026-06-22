@@ -27,6 +27,18 @@ export function getGoogleOAuthClient() {
 
 type GoogleOAuthClient = ReturnType<typeof getGoogleOAuthClient>;
 
+export function getGoogleTokenExpiryDate(
+  value: Date | string | number | null | undefined,
+) {
+  if (!value) {
+    return undefined;
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+
+  return Number.isNaN(date.getTime()) ? undefined : date.getTime();
+}
+
 export function getDriveFileId(url: string | null) {
   if (!url) return null;
 

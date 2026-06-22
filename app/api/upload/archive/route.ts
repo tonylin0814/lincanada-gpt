@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { getCurrentSession } from "@/lib/auth";
 import { getWebAppDb, getUserDb } from "@/lib/db";
-import { ensureFolderPath, getGoogleOAuthClient, uploadFile } from "@/lib/drive";
+import {
+  ensureFolderPath,
+  getGoogleOAuthClient,
+  getGoogleTokenExpiryDate,
+  uploadFile,
+} from "@/lib/drive";
 import type { ExtractedExif } from "@/lib/exif";
 import type { Receipt } from "@/types/licanada_gpt";
 
@@ -283,9 +288,7 @@ export async function POST(request: Request) {
     auth.setCredentials({
       access_token: googleUser.google_access_token ?? undefined,
       refresh_token: googleUser.google_refresh_token ?? undefined,
-      expiry_date: googleUser.google_token_expiry
-        ? googleUser.google_token_expiry.getTime()
-        : undefined,
+      expiry_date: getGoogleTokenExpiryDate(googleUser.google_token_expiry),
     });
 
     const client = await getUserDb(session.user.supabase_connection_string);
