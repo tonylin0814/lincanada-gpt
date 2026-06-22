@@ -20,8 +20,18 @@ type PendingReceipt = {
   entity_id: number;
 };
 
+type BloodPressureSummary = {
+  averageDiastolic: number | null;
+  averageSystolic: number | null;
+  latestDate: string | null;
+  latestDiastolic: number | null;
+  latestSystolic: number | null;
+  totalReadings: number;
+};
+
 type DashboardClientProps = {
   availableYears: number[];
+  bloodPressureSummary: BloodPressureSummary | null;
   entities: DashboardEntity[];
   summaries: ExpenseSummary[];
   pendingReceipts: PendingReceipt[];
@@ -132,8 +142,69 @@ function PendingBlock({
   );
 }
 
+function formatDate(value: string | null) {
+  return value ? new Date(value).toLocaleDateString() : "No readings yet";
+}
+
+function BloodPressureBlock({
+  summary,
+}: {
+  summary: BloodPressureSummary;
+}) {
+  const latest =
+    summary.latestSystolic !== null && summary.latestDiastolic !== null
+      ? `${summary.latestSystolic}/${summary.latestDiastolic}`
+      : "--";
+  const average =
+    summary.averageSystolic !== null && summary.averageDiastolic !== null
+      ? `${summary.averageSystolic}/${summary.averageDiastolic}`
+      : "--";
+
+  return (
+    <section className="mt-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-xl font-semibold tracking-normal">
+          Blood Pressure
+        </h2>
+        <Link
+          className="text-sm underline"
+          href="/dashboard/health/blood-pressure"
+        >
+          Open Blood Pressure
+        </Link>
+      </div>
+      <div className="mt-4 grid gap-5 md:grid-cols-3">
+        <section className="rounded-md border border-foreground/10 p-5">
+          <h3 className="text-sm font-medium text-foreground/60">Latest</h3>
+          <p className="mt-2 text-2xl font-semibold">{latest}</p>
+          <p className="mt-1 text-sm text-foreground/60">
+            {formatDate(summary.latestDate)}
+          </p>
+        </section>
+        <section className="rounded-md border border-foreground/10 p-5">
+          <h3 className="text-sm font-medium text-foreground/60">Average</h3>
+          <p className="mt-2 text-2xl font-semibold">{average}</p>
+          <p className="mt-1 text-sm text-foreground/60">
+            Last {summary.totalReadings} reading
+            {summary.totalReadings === 1 ? "" : "s"}
+          </p>
+        </section>
+        <section className="rounded-md border border-foreground/10 p-5">
+          <h3 className="text-sm font-medium text-foreground/60">
+            Total Readings
+          </h3>
+          <p className="mt-2 text-2xl font-semibold">
+            {summary.totalReadings}
+          </p>
+        </section>
+      </div>
+    </section>
+  );
+}
+
 export function DashboardClient({
   availableYears,
+  bloodPressureSummary,
   entities,
   summaries,
   pendingReceipts,
@@ -241,6 +312,10 @@ export function DashboardClient({
           title="Company Expenses Upload Pending"
         />
       </div>
+
+      {bloodPressureSummary ? (
+        <BloodPressureBlock summary={bloodPressureSummary} />
+      ) : null}
     </>
   );
 }

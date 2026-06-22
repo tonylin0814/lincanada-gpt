@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth";
 import { getUserDb } from "@/lib/db";
-import { syncUserRecordTypes } from "@/lib/features";
+import { getUserFeatures, syncUserRecordTypes } from "@/lib/features";
+import { getBloodPressureLogs } from "@/lib/health";
 import type { Entity } from "@/types/licanada_gpt";
 import { DashboardClient } from "./dashboard-client";
 
@@ -76,6 +77,10 @@ export default async function DashboardPage({
     await syncUserRecordTypes(session.user.id, client).catch((error) => {
       console.error("Could not sync user record types:", error);
     });
+    const enabledFeatures = await getUserFeatures(session.user.id);
+    const showBloodPressure = enabledFeatures.some(
+      (feature) => feature.key === "blood_pressure" && feature.is_enabled,
+    );
 
     const yearsResult = await client.query<{ year: string }>(
       `SELECT DISTINCT EXTRACT(YEAR FROM receipt_date)::int AS year
@@ -134,7 +139,12 @@ export default async function DashboardPage({
         ? []
         : [`${selectedYear}-01-01`, `${selectedYear + 1}-01-01`];
 
-    const [entitiesResult, summariesResult, pendingResult] = await Promise.all([
+    const [
+      entitiesResult,
+      summariesResult,
+      pendingResult,
+      bloodPressureLogs,
+    ] = await Promise.all([
       client.query<Entity>(
         `SELECT *
          FROM entities
@@ -154,7 +164,23 @@ export default async function DashboardPage({
         grand_total: string | null;
         currency: string;
       }>(pendingSql, yearValues),
+      showBloodPressure ? getBloodPressureLogs(client) : Promise.resolve([]),
     ]);
+    const averageSystolic =
+      bloodPressureLogs.length > 0
+        ? Math.round(
+            bloodPressureLogs.reduce((sum, log) => sum + log.systolic, 0) /
+              bloodPressureLogs.length,
+          )
+        : null;
+    const averageDiastolic =
+      bloodPressureLogs.length > 0
+        ? Math.round(
+            bloodPressureLogs.reduce((sum, log) => sum + log.diastolic, 0) /
+              bloodPressureLogs.length,
+          )
+        : null;
+    const latestBloodPressure = bloodPressureLogs[0] ?? null;
 
     return (
       <main className="min-h-screen bg-background px-6 py-10 text-foreground">
@@ -170,6 +196,20 @@ export default async function DashboardPage({
 
           <DashboardClient
             availableYears={availableYears}
+            bloodPressureSummary={
+              showBloodPressure
+                ? {
+                    averageDiastolic,
+                    averageSystolic,
+                    latestDate: latestBloodPressure
+                      ? latestBloodPressure.log_date.toISOString()
+                      : null,
+                    latestDiastolic: latestBloodPressure?.diastolic ?? null,
+                    latestSystolic: latestBloodPressure?.systolic ?? null,
+                    totalReadings: bloodPressureLogs.length,
+                  }
+                : null
+            }
             entities={entitiesResult.rows.map((entity) => ({
               id: entity.id,
               name: entity.name,
