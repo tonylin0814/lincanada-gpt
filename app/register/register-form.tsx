@@ -3,11 +3,11 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
-export function LoginForm() {
+export function RegisterForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -18,6 +18,21 @@ export function LoginForm() {
     setError("");
     setIsSubmitting(true);
 
+    const response = await fetch("/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, password }),
+    });
+
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      setError(body?.error ?? "Could not register account.");
+      setIsSubmitting(false);
+      return;
+    }
+
     const result = await signIn("credentials", {
       email,
       password,
@@ -27,18 +42,31 @@ export function LoginForm() {
     setIsSubmitting(false);
 
     if (result?.error) {
-      setError("Invalid email or password.");
+      router.push("/login");
+      router.refresh();
       return;
     }
 
-    router.push(searchParams.get("callbackUrl") ?? "/dashboard");
+    router.push("/dashboard");
     router.refresh();
   }
 
   return (
     <form className="w-full max-w-sm" onSubmit={handleSubmit}>
-      <h1 className="text-2xl font-semibold tracking-normal">Login</h1>
+      <h1 className="text-2xl font-semibold tracking-normal">Register</h1>
       <div className="mt-6 space-y-4">
+        <label className="block">
+          <span className="text-sm font-medium">Name</span>
+          <input
+            className="mt-2 h-11 w-full rounded-md border border-foreground/20 bg-transparent px-3 text-sm outline-none focus:border-foreground"
+            autoComplete="name"
+            name="name"
+            onChange={(event) => setName(event.target.value)}
+            required
+            type="text"
+            value={name}
+          />
+        </label>
         <label className="block">
           <span className="text-sm font-medium">Email</span>
           <input
@@ -55,7 +83,8 @@ export function LoginForm() {
           <span className="text-sm font-medium">Password</span>
           <input
             className="mt-2 h-11 w-full rounded-md border border-foreground/20 bg-transparent px-3 text-sm outline-none focus:border-foreground"
-            autoComplete="current-password"
+            autoComplete="new-password"
+            minLength={8}
             name="password"
             onChange={(event) => setPassword(event.target.value)}
             required
@@ -70,12 +99,12 @@ export function LoginForm() {
         disabled={isSubmitting}
         type="submit"
       >
-        {isSubmitting ? "Signing in..." : "Sign in"}
+        {isSubmitting ? "Creating account..." : "Create account"}
       </button>
       <p className="mt-5 text-center text-sm text-foreground/65">
-        Need an account?{" "}
-        <Link className="font-medium underline" href="/register">
-          Register
+        Already have an account?{" "}
+        <Link className="font-medium underline" href="/login">
+          Login
         </Link>
       </p>
     </form>

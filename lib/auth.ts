@@ -3,7 +3,6 @@ import type { NextAuthOptions, Session } from "next-auth";
 import type { JWT } from "next-auth/jwt";
 import { getServerSession } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import GoogleProvider from "next-auth/providers/google";
 import { getWebAppDb } from "@/lib/db";
 
 type WebAppUserRow = {
@@ -50,33 +49,6 @@ async function getActiveUserByEmail(email: string) {
   return result.rows[0] ? mapAuthUser(result.rows[0]) : null;
 }
 
-async function getOrCreateGoogleUser(email: string, name?: string | null) {
-  const normalizedEmail = email.trim().toLowerCase();
-  const existingUser = await getActiveUserByEmail(normalizedEmail);
-
-  if (existingUser) {
-    return existingUser;
-  }
-
-  const db = getWebAppDb();
-  const result = await db.query<WebAppUserRow>(
-    `INSERT INTO users (
-       name,
-       email,
-       password_hash,
-       supabase_connection_string,
-       is_admin,
-       is_active
-     )
-     VALUES ($1, $2, '', '', FALSE, TRUE)
-     RETURNING id, name, email, password_hash, supabase_connection_string,
-               google_drive_folder_id, is_admin`,
-    [name?.trim() || normalizedEmail.split("@")[0], normalizedEmail],
-  );
-
-  return mapAuthUser(result.rows[0]);
-}
-
 async function refreshTokenFromUserEmail(token: JWT) {
   if (!token.email) {
     return token;
@@ -111,14 +83,6 @@ export const authOptions: NextAuthOptions = {
     signIn: "/login",
   },
   providers: [
-    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
-      ? [
-          GoogleProvider({
-            clientId: process.env.GOOGLE_CLIENT_ID,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-          }),
-        ]
-      : []),
     CredentialsProvider({
       name: "Email and password",
       credentials: {
@@ -168,30 +132,6 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async signIn({ user, account }) {
-      if (account?.provider !== "google") {
-        return true;
-      }
-
-      if (!user.email) {
-        return false;
-      }
-
-      try {
-        const appUser = await getOrCreateGoogleUser(user.email, user.name);
-        user.id = appUser.id;
-        user.name = appUser.name;
-        user.email = appUser.email;
-        user.supabase_connection_string =
-          appUser.supabase_connection_string;
-        user.google_drive_folder_id = appUser.google_drive_folder_id;
-        user.is_admin = appUser.is_admin;
-        return true;
-      } catch (error) {
-        console.error("Google login failed:", error);
-        return false;
-      }
-    },
     async jwt({ token, user }) {
       if (user) {
         const appUser =
