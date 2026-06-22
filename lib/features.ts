@@ -523,7 +523,13 @@ export async function getUserRecordTypes(userId: number) {
   return result.rows;
 }
 
-export async function listUnreadAdminNotifications() {
+export async function listUnreadAdminNotifications({
+  limit = 20,
+  offset = 0,
+}: {
+  limit?: number;
+  offset?: number;
+} = {}) {
   await ensureFeatureTables();
   const db = getWebAppDb();
   const result = await db.query<{
@@ -547,8 +553,22 @@ export async function listUnreadAdminNotifications() {
      FROM admin_notifications n
      JOIN users u ON u.id = n.user_id
      WHERE n.status = 'unread'
-     ORDER BY n.created_at DESC`,
+     ORDER BY n.created_at DESC
+     LIMIT $1 OFFSET $2`,
+    [limit, offset],
   );
 
   return result.rows;
+}
+
+export async function countUnreadAdminNotifications() {
+  await ensureFeatureTables();
+  const db = getWebAppDb();
+  const result = await db.query<{ count: string }>(
+    `SELECT COUNT(*) AS count
+     FROM admin_notifications
+     WHERE status = 'unread'`,
+  );
+
+  return Number(result.rows[0]?.count ?? 0);
 }
