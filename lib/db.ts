@@ -24,6 +24,16 @@ function createConnectionConfig(connectionString: string): ClientConfig {
   return config;
 }
 
+function getWebAppSchema() {
+  const schema = process.env.WEBAPP_DATABASE_SCHEMA || "webapp";
+
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(schema)) {
+    throw new Error("WEBAPP_DATABASE_SCHEMA must be a valid Postgres schema name.");
+  }
+
+  return schema;
+}
+
 export function getWebAppDb() {
   const connectionString = process.env.WEBAPP_DATABASE_URL;
 
@@ -34,6 +44,7 @@ export function getWebAppDb() {
   if (!globalThis.webAppDbPool) {
     const poolConfig: PoolConfig = {
       ...createConnectionConfig(connectionString),
+      options: `-c search_path=${getWebAppSchema()},public`,
       max: 10,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 10_000,
