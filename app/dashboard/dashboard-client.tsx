@@ -161,19 +161,8 @@ function BloodPressureBlock({
       : "--";
 
   return (
-    <section className="mt-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-semibold tracking-normal">
-          Blood Pressure
-        </h2>
-        <Link
-          className="text-sm underline"
-          href="/dashboard/health/blood-pressure"
-        >
-          Open Blood Pressure
-        </Link>
-      </div>
-      <div className="mt-4 grid gap-5 md:grid-cols-3">
+    <div>
+      <div className="grid gap-5 md:grid-cols-3">
         <section className="rounded-md border border-foreground/10 p-5">
           <h3 className="text-sm font-medium text-foreground/60">Latest</h3>
           <p className="mt-2 text-2xl font-semibold">{latest}</p>
@@ -198,7 +187,15 @@ function BloodPressureBlock({
           </p>
         </section>
       </div>
-    </section>
+      <div className="mt-4">
+        <Link
+          className="inline-flex h-10 items-center rounded-md bg-foreground px-4 text-sm font-medium text-background transition-opacity hover:opacity-85"
+          href="/dashboard/health/blood-pressure"
+        >
+          Open Blood Pressure
+        </Link>
+      </div>
+    </div>
   );
 }
 
@@ -249,72 +246,88 @@ export function DashboardClient({
 
   return (
     <>
-      <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
-        <label className="block w-full max-w-48">
-          <span className="text-sm font-medium">Year</span>
-          <select
-            className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3 text-sm outline-none transition-colors hover:border-foreground/45 focus:border-foreground"
-            onChange={(event) => changeYear(event.target.value)}
-            value={year}
-          >
-            <option value="all">All Years</option>
-            {availableYears.map((availableYear) => (
-              <option key={availableYear} value={availableYear}>
-                {availableYear}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <div className="mt-6 grid gap-5 lg:grid-cols-2">
-        <ExpenseBlock
-          entity={personalEntity}
-          summary={personalSummary}
-          title="Personal Expenses"
-          year={year}
-        />
-        <ExpenseBlock
-          entity={selectedCompany}
-          summary={companySummary}
-          title="Company Expenses"
-          year={year}
-        >
-          <label className="block max-w-sm">
-            <span className="text-sm font-medium">Company</span>
+      <section className="mt-8">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold tracking-normal">Finance</h2>
+            <p className="mt-1 text-sm text-foreground/60">
+              Expenses, revenue, reports, and upload status.
+            </p>
+          </div>
+          <label className="block w-full max-w-48">
+            <span className="text-sm font-medium">Year</span>
             <select
               className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3 text-sm outline-none transition-colors hover:border-foreground/45 focus:border-foreground"
-              disabled={companies.length === 0}
-              onChange={(event) => setSelectedCompanyId(event.target.value)}
-              value={selectedCompanyId}
+              onChange={(event) => changeYear(event.target.value)}
+              value={year}
             >
-              {companies.length > 0 ? (
-                companies.map((company) => (
-                  <option key={company.id} value={company.id}>
-                    {company.name}
-                  </option>
-                ))
-              ) : (
-                <option value="">No company found</option>
-              )}
+              <option value="all">All Years</option>
+              {availableYears.map((availableYear) => (
+                <option key={availableYear} value={availableYear}>
+                  {availableYear}
+                </option>
+              ))}
             </select>
           </label>
-        </ExpenseBlock>
-      </div>
+        </div>
 
-      <div className="mt-6 grid gap-5 lg:grid-cols-2">
-        <PendingBlock
-          count={personalPending.length}
-          title="Personal Expenses Upload Pending"
-        />
-        <PendingBlock
-          count={companyPending.length}
-          title="Company Expenses Upload Pending"
-        />
-      </div>
+        <div className="mt-5 grid gap-5 lg:grid-cols-2">
+          <ExpenseBlock
+            entity={personalEntity}
+            summary={personalSummary}
+            title="Personal Expenses"
+            year={year}
+          />
+          <ExpenseBlock
+            entity={selectedCompany}
+            summary={companySummary}
+            title="Company Expenses"
+            year={year}
+          >
+            <label className="block max-w-sm">
+              <span className="text-sm font-medium">Company</span>
+              <select
+                className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3 text-sm outline-none transition-colors hover:border-foreground/45 focus:border-foreground"
+                disabled={companies.length === 0}
+                onChange={(event) => setSelectedCompanyId(event.target.value)}
+                value={selectedCompanyId}
+              >
+                {companies.length > 0 ? (
+                  companies.map((company) => (
+                    <option key={company.id} value={company.id}>
+                      {company.name}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">No company found</option>
+                )}
+              </select>
+            </label>
+          </ExpenseBlock>
+        </div>
+
+        <div className="mt-6 grid gap-5 lg:grid-cols-2">
+          <PendingBlock
+            count={personalPending.length}
+            title="Personal Expenses Upload Pending"
+          />
+          <PendingBlock
+            count={companyPending.length}
+            title="Company Expenses Upload Pending"
+          />
+        </div>
+      </section>
 
       {bloodPressureSummary ? (
-        <BloodPressureBlock summary={bloodPressureSummary} />
+        <section className="mt-10">
+          <div className="mb-5">
+            <h2 className="text-xl font-semibold tracking-normal">Health</h2>
+            <p className="mt-1 text-sm text-foreground/60">
+              Health records and personal measurements.
+            </p>
+          </div>
+          <BloodPressureBlock summary={bloodPressureSummary} />
+        </section>
       ) : null}
     </>
   );

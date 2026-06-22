@@ -7,6 +7,7 @@ import {
   getBloodPressureLogs,
 } from "@/lib/health";
 import { BloodPressureForm } from "./blood-pressure-form";
+import { BloodPressureTrendChart } from "./blood-pressure-trend-chart";
 
 function formatDate(value: Date | string) {
   return new Date(value).toLocaleDateString();
@@ -97,6 +98,16 @@ export default async function BloodPressurePage() {
               <p className="mt-2 text-2xl font-semibold">{logs.length}</p>
             </section>
           </div>
+
+          <BloodPressureTrendChart
+            points={logs.map((log) => ({
+              date: `${new Date(log.log_date).toISOString().slice(0, 10)}T${
+                log.log_time ? String(log.log_time).slice(0, 8) : "00:00:00"
+              }`,
+              diastolic: log.diastolic,
+              systolic: log.systolic,
+            }))}
+          />
 
           <BloodPressureForm />
 
