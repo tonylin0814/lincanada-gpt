@@ -17,11 +17,6 @@ type ExpenseSummary = {
 
 type PendingReceipt = {
   entity_id: number;
-  record_r_number: string;
-  vendor: string;
-  receipt_date: string;
-  grand_total: string | null;
-  currency: string;
 };
 
 type DashboardClientProps = {
@@ -35,17 +30,6 @@ function money(value: number, currency = "CAD") {
     style: "currency",
     currency,
   }).format(value);
-}
-
-function formatDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value.slice(0, 10);
-
-  return date.toLocaleDateString("en-US", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
 }
 
 function getSummary(summaries: ExpenseSummary[], entityId?: number) {
@@ -112,62 +96,23 @@ function ExpenseBlock({
 
 function PendingBlock({
   title,
-  receipts,
+  count,
 }: {
   title: string;
-  receipts: PendingReceipt[];
+  count: number;
 }) {
   return (
-    <section className="border border-foreground/10 p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold tracking-normal">{title}</h2>
-        <span className="text-sm text-foreground/60">
-          {receipts.length} pending
-        </span>
-      </div>
-      <div className="mt-4 overflow-x-auto">
-        {receipts.length > 0 ? (
-          <table className="w-full min-w-[620px] border-collapse text-left text-sm">
-            <thead className="bg-foreground/5">
-              <tr>
-                <th className="px-3 py-2 font-medium">Record</th>
-                <th className="px-3 py-2 font-medium">Date</th>
-                <th className="px-3 py-2 font-medium">Vendor</th>
-                <th className="px-3 py-2 text-right font-medium">Total</th>
-                <th className="px-3 py-2 font-medium">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {receipts.map((receipt) => (
-                <tr
-                  className="border-t border-foreground/10"
-                  key={receipt.record_r_number}
-                >
-                  <td className="px-3 py-2">{receipt.record_r_number}</td>
-                  <td className="px-3 py-2">
-                    {formatDate(receipt.receipt_date)}
-                  </td>
-                  <td className="px-3 py-2">{receipt.vendor}</td>
-                  <td className="px-3 py-2 text-right">
-                    {money(Number(receipt.grand_total ?? 0), receipt.currency)}
-                  </td>
-                  <td className="px-3 py-2">
-                    <Link
-                      className="underline transition-colors hover:text-blue-700"
-                      href={`/dashboard/records/receipts/${encodeURIComponent(
-                        receipt.record_r_number,
-                      )}`}
-                    >
-                      Review
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="text-sm text-foreground/60">No upload pending.</p>
-        )}
+    <section className="rounded-md border border-foreground/10 p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold tracking-normal">{title}</h2>
+          <p className="mt-1 text-sm text-foreground/60">
+            Receipts waiting for Google Drive upload
+          </p>
+        </div>
+        <p className={count > 0 ? "text-3xl font-semibold text-red-700" : "text-3xl font-semibold text-green-700"}>
+          {count}
+        </p>
       </div>
     </section>
   );
@@ -243,11 +188,11 @@ export function DashboardClient({
 
       <div className="mt-6 grid gap-5 lg:grid-cols-2">
         <PendingBlock
-          receipts={personalPending}
+          count={personalPending.length}
           title="Personal Expenses Upload Pending"
         />
         <PendingBlock
-          receipts={companyPending}
+          count={companyPending.length}
           title="Company Expenses Upload Pending"
         />
       </div>
