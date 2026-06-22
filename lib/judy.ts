@@ -37,6 +37,19 @@ type MealReceiptRow = {
   item_total_price: string | number | null;
 };
 
+type SpendingSummaryRow = {
+  receipt_count: string | number;
+  total_spending: string | number | null;
+  currency: string;
+};
+
+type SpendingCategoryRow = {
+  category: string;
+  total_spending: string | number | null;
+  receipt_count: string | number;
+  currency: string;
+};
+
 type JudyDatabaseHealth = {
   connected: boolean;
   tables: Record<string, boolean>;
@@ -53,6 +66,20 @@ type JudyDatabaseHealth = {
 
 const judyModel = process.env.OPENAI_JUDY_MODEL || "gpt-5.4-mini";
 const maxRows = 100;
+const monthNames = [
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
+];
 
 const approvedTables = new Set([
   "blood_pressure_logs",
@@ -652,6 +679,66 @@ function getRequestedMealDate(message: string) {
   return null;
 }
 
+function getMonthRange(year: number, month: number) {
+  const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  const endDate = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`;
+
+  return { startDate, endDate };
+}
+
+function getRequestedSpendingPeriod(message: string) {
+  const mentionsSpending =
+    /(spend|spent|spending|expense|expenses|cost|costs|花了|花費|花费|用钱|用了多少钱|多少钱)/i.test(
+      message,
+    );
+
+  if (!mentionsSpending) {
+    return null;
+  }
+
+  const timeContext = getJudyTimeContext();
+  if (/(this month|current month|本月|这个月|這個月)/i.test(message)) {
+    const [year, month] = timeContext.today.split("-").map(Number);
+    return {
+      ...getMonthRange(year, month),
+      labelEn: "this month",
+      labelZh: "这个月",
+    };
+  }
+
+  const monthMatch = new RegExp(
+    `\\b(${monthNames.join("|")})\\s*,?\\s*(20\\d{2})\\b`,
+    "i",
+  ).exec(message);
+
+  if (monthMatch) {
+    const month = monthNames.indexOf(monthMatch[1].toLowerCase()) + 1;
+    const year = Number(monthMatch[2]);
+    return {
+      ...getMonthRange(year, month),
+      labelEn: `${monthMatch[1]} ${year}`,
+      labelZh: `${year}年${month}月`,
+    };
+  }
+
+  const numericMonthMatch = /\b(20\d{2})[-/年](\d{1,2})月?\b/.exec(message);
+  if (numericMonthMatch) {
+    const year = Number(numericMonthMatch[1]);
+    const month = Number(numericMonthMatch[2]);
+    if (month >= 1 && month <= 12) {
+      return {
+        ...getMonthRange(year, month),
+        labelEn: `${monthNames[month - 1]} ${year}`,
+        labelZh: `${year}年${month}月`,
+      };
+    }
+  }
+
+  return null;
+}
+
 function isChineseText(message: string) {
   return /[\u3400-\u9fff]/.test(message);
 }
@@ -848,6 +935,104 @@ ${itemLines}`;
   }
 }
 
+async function answerSpendingPeriod(
+  client: Client,
+  period: {
+    startDate: string;
+    endDate: string;
+    labelEn: string;
+    labelZh: string;
+  },
+  language: "zh" | "en",
+): Promise<JudyAnswer> {
+  await client.query("BEGIN READ ONLY");
+  try {
+    await client.query("SET LOCAL statement_timeout = '5000ms'");
+    const summaryResult = await client.query<SpendingSummaryRow>(
+      `
+        SELECT
+          count(*)::text AS receipt_count,
+          coalesce(sum(grand_total), 0)::text AS total_spending,
+          coalesce(min(currency), 'CAD') AS currency
+        FROM receipts
+        WHERE receipt_date >= $1
+          AND receipt_date < $2
+      `,
+      [period.startDate, period.endDate],
+    );
+    const categoryResult = await client.query<SpendingCategoryRow>(
+      `
+        SELECT
+          category,
+          coalesce(sum(grand_total), 0)::text AS total_spending,
+          count(*)::text AS receipt_count,
+          coalesce(min(currency), 'CAD') AS currency
+        FROM receipts
+        WHERE receipt_date >= $1
+          AND receipt_date < $2
+        GROUP BY category
+        ORDER BY sum(grand_total) DESC NULLS LAST
+        LIMIT 5
+      `,
+      [period.startDate, period.endDate],
+    );
+    await client.query("COMMIT");
+
+    const summary = summaryResult.rows[0];
+    const receiptCount = Number(summary?.receipt_count ?? 0);
+    const currency = summary?.currency ?? "CAD";
+    const total = summary?.total_spending ?? 0;
+
+    if (receiptCount === 0) {
+      return {
+        answer:
+          language === "zh"
+            ? `我没有看到${period.labelZh}的支出记录。`
+            : `I do not see any spending records for ${period.labelEn}.`,
+      };
+    }
+
+    if (language === "zh") {
+      const categoryLines = categoryResult.rows
+        .map(
+          (row) =>
+            `- ${row.category}：${formatDisplayMoney(
+              row.total_spending,
+              row.currency,
+            )}，${row.receipt_count} 笔`,
+        )
+        .join("\n");
+
+      return {
+        answer: `${period.labelZh}你一共花了 ${formatDisplayMoney(
+          total,
+          currency,
+        )}，共 ${receiptCount} 笔支出。\n\n主要分类：\n${categoryLines}`,
+      };
+    }
+
+    const categoryLines = categoryResult.rows
+      .map(
+        (row) =>
+          `- ${row.category}: ${formatDisplayMoney(
+            row.total_spending,
+            row.currency,
+          )} across ${row.receipt_count} receipt(s)`,
+      )
+      .join("\n");
+
+    return {
+      answer: `You spent ${formatDisplayMoney(
+        total,
+        currency,
+      )} in ${period.labelEn}, across ${receiptCount} receipt(s).\n\nTop categories:\n${categoryLines}`,
+    };
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  }
+}
+
 async function answerLatestExpense(client: Client): Promise<JudyAnswer> {
   await client.query("BEGIN READ ONLY");
   try {
@@ -1029,6 +1214,18 @@ export async function askJudy(
     return answerMealByDate(
       client,
       requestedMealDate,
+      isChineseText(latestUserMessage.text) ? "zh" : "en",
+    );
+  }
+
+  const requestedSpendingPeriod = latestUserMessage
+    ? getRequestedSpendingPeriod(latestUserMessage.text)
+    : null;
+
+  if (latestUserMessage && requestedSpendingPeriod) {
+    return answerSpendingPeriod(
+      client,
+      requestedSpendingPeriod,
       isChineseText(latestUserMessage.text) ? "zh" : "en",
     );
   }
