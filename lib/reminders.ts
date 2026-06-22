@@ -52,7 +52,7 @@ export async function getReminders(client: Client, limit = 500) {
             is_active,
             created_at
      FROM reminders
-     WHERE is_active = TRUE
+     WHERE is_active IS DISTINCT FROM FALSE
      ORDER BY trigger_date ASC NULLS LAST, created_at DESC
      LIMIT $1`,
     [limit],
@@ -99,7 +99,7 @@ export async function getDashboardReminders(client: Client) {
             is_active,
             created_at
      FROM reminders
-     WHERE is_active = TRUE
+     WHERE is_active IS DISTINCT FROM FALSE
        AND (
          trigger_date = CURRENT_DATE
          OR (
@@ -141,7 +141,7 @@ export async function getDashboardReminders(client: Client) {
             is_active,
             created_at
      FROM reminders
-     WHERE is_active = TRUE
+     WHERE is_active IS DISTINCT FROM FALSE
        AND (
          trigger_date > CURRENT_DATE
          OR (

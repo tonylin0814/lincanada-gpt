@@ -86,6 +86,23 @@ function formatReminderDate(reminder: ReminderItem) {
   return "No date";
 }
 
+function getReminderStatus(reminder: ReminderItem) {
+  if (reminder.is_recurring) {
+    return "Recurring";
+  }
+
+  if (!reminder.trigger_date) {
+    return "No Date";
+  }
+
+  const reminderDate = reminder.trigger_date.slice(0, 10);
+  const today = todayKey();
+
+  if (reminderDate < today) return "Past";
+  if (reminderDate === today) return "Today";
+  return "Upcoming";
+}
+
 export function RemindersClient({ reminders }: RemindersClientProps) {
   const router = useRouter();
   const [selectedDate, setSelectedDate] = useState(todayKey());
@@ -292,7 +309,12 @@ export function RemindersClient({ reminders }: RemindersClientProps) {
                 className="rounded-md border border-foreground/10 p-4"
                 key={reminder.id}
               >
-                <p className="font-medium">{reminder.reminder_text}</p>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <p className="font-medium">{reminder.reminder_text}</p>
+                  <span className="rounded-md border border-green-700 px-2 py-1 text-xs font-medium text-green-800">
+                    {getReminderStatus(reminder)}
+                  </span>
+                </div>
                 <p className="mt-2 text-sm text-foreground/60">
                   {formatReminderDate(reminder)}
                 </p>
