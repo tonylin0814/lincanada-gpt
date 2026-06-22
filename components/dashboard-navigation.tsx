@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { signOut } from "next-auth/react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { startPageLoading } from "@/components/page-loading-indicator";
@@ -219,9 +220,18 @@ export function DashboardNavigation({
           Admin Panel
         </Link>
       ) : null}
-      <span className="ml-auto text-sm font-medium text-foreground/70">
-        Welcome, {userName}
-      </span>
+      <div className="ml-auto flex items-center gap-3">
+        <span className="text-sm font-medium text-foreground/70">
+          Welcome, {userName}
+        </span>
+        <button
+          className="h-9 rounded-md border border-foreground/20 px-3 text-sm font-medium text-foreground/75 transition-colors hover:border-red-700 hover:bg-red-50 hover:text-red-700"
+          onClick={() => signOut({ callbackUrl: "/login" })}
+          type="button"
+        >
+          Log Out
+        </button>
+      </div>
     </nav>
   );
 }
