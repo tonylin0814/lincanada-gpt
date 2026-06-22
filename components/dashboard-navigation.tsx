@@ -204,8 +204,14 @@ function FinanceMenu({
   );
 }
 
-function HealthMenu({ showBloodPressure }: { showBloodPressure: boolean }) {
-  if (!showBloodPressure) {
+function HealthMenu({
+  showBloodPressure,
+  showWeight,
+}: {
+  showBloodPressure: boolean;
+  showWeight: boolean;
+}) {
+  if (!showBloodPressure && !showWeight) {
     return null;
   }
 
@@ -218,9 +224,16 @@ function HealthMenu({ showBloodPressure }: { showBloodPressure: boolean }) {
         Health
       </button>
       <div className="invisible absolute left-0 top-full z-50 w-64 rounded-md border border-foreground/10 bg-background p-3 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
-        <Link className={menuItemClass} href="/dashboard/health/blood-pressure">
-          Blood Pressure
-        </Link>
+        {showBloodPressure ? (
+          <Link className={menuItemClass} href="/dashboard/health/blood-pressure">
+            Blood Pressure
+          </Link>
+        ) : null}
+        {showWeight ? (
+          <Link className={menuItemClass} href="/dashboard/health/weight">
+            Weight
+          </Link>
+        ) : null}
       </div>
     </div>
   );
@@ -310,7 +323,10 @@ export function DashboardNavigation({
           showPersonalRevenue={hasFeature("personal_revenue")}
         />
       ) : null}
-      <HealthMenu showBloodPressure={hasFeature("blood_pressure")} />
+      <HealthMenu
+        showBloodPressure={hasFeature("blood_pressure")}
+        showWeight={hasFeature("weight")}
+      />
       <Link className="text-foreground/75 hover:text-foreground" href="/dashboard/categories">
         Categories
       </Link>

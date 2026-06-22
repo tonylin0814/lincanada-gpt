@@ -29,12 +29,20 @@ type BloodPressureSummary = {
   totalReadings: number;
 };
 
+type WeightSummary = {
+  averageWeight: number | null;
+  latestDate: string | null;
+  latestWeight: number | null;
+  totalReadings: number;
+};
+
 type DashboardClientProps = {
   availableYears: number[];
   bloodPressureSummary: BloodPressureSummary | null;
   entities: DashboardEntity[];
   summaries: ExpenseSummary[];
   pendingReceipts: PendingReceipt[];
+  weightSummary: WeightSummary | null;
   year: number | "all";
 };
 
@@ -200,12 +208,66 @@ function BloodPressureBlock({
   );
 }
 
+function formatWeight(value: number | null) {
+  return value === null ? "--" : `${value.toFixed(1)} kg`;
+}
+
+function WeightBlock({
+  summary,
+}: {
+  summary: WeightSummary;
+}) {
+  return (
+    <div className="rounded-md border-2 border-green-600 p-4">
+      <h3 className="text-lg font-semibold tracking-normal">Weight</h3>
+      <div className="mt-4 grid gap-5 md:grid-cols-3">
+        <section className="rounded-md border border-foreground/10 p-5">
+          <h3 className="text-sm font-medium text-foreground/60">Latest</h3>
+          <p className="mt-2 text-2xl font-semibold">
+            {formatWeight(summary.latestWeight)}
+          </p>
+          <p className="mt-1 text-sm text-foreground/60">
+            {formatDate(summary.latestDate)}
+          </p>
+        </section>
+        <section className="rounded-md border border-foreground/10 p-5">
+          <h3 className="text-sm font-medium text-foreground/60">Average</h3>
+          <p className="mt-2 text-2xl font-semibold">
+            {formatWeight(summary.averageWeight)}
+          </p>
+          <p className="mt-1 text-sm text-foreground/60">
+            Last {summary.totalReadings} reading
+            {summary.totalReadings === 1 ? "" : "s"}
+          </p>
+        </section>
+        <section className="rounded-md border border-foreground/10 p-5">
+          <h3 className="text-sm font-medium text-foreground/60">
+            Total Readings
+          </h3>
+          <p className="mt-2 text-2xl font-semibold">
+            {summary.totalReadings}
+          </p>
+        </section>
+      </div>
+      <div className="mt-4">
+        <Link
+          className="inline-flex h-10 items-center rounded-md bg-foreground px-4 text-sm font-medium text-background transition-opacity hover:opacity-85"
+          href="/dashboard/health/weight"
+        >
+          Open Weight
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export function DashboardClient({
   availableYears,
   bloodPressureSummary,
   entities,
   summaries,
   pendingReceipts,
+  weightSummary,
   year,
 }: DashboardClientProps) {
   const router = useRouter();
@@ -321,7 +383,7 @@ export function DashboardClient({
         </div>
       </section>
 
-      {bloodPressureSummary ? (
+      {bloodPressureSummary || weightSummary ? (
         <section className="mt-10">
           <div className="mb-5">
             <h2 className="text-xl font-semibold tracking-normal">Health</h2>
@@ -329,7 +391,12 @@ export function DashboardClient({
               Health records and personal measurements.
             </p>
           </div>
-          <BloodPressureBlock summary={bloodPressureSummary} />
+          <div className="grid gap-5">
+            {bloodPressureSummary ? (
+              <BloodPressureBlock summary={bloodPressureSummary} />
+            ) : null}
+            {weightSummary ? <WeightBlock summary={weightSummary} /> : null}
+          </div>
         </section>
       ) : null}
     </>

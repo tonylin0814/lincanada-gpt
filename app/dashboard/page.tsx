@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth";
 import { getUserDb } from "@/lib/db";
 import { getUserFeatures, syncUserRecordTypes } from "@/lib/features";
-import { getBloodPressureLogs } from "@/lib/health";
+import { getBloodPressureLogs, getWeightLogs } from "@/lib/health";
 import type { Entity } from "@/types/licanada_gpt";
 import { DashboardClient } from "./dashboard-client";
 
@@ -81,6 +81,9 @@ export default async function DashboardPage({
     const showBloodPressure = enabledFeatures.some(
       (feature) => feature.key === "blood_pressure" && feature.is_enabled,
     );
+    const showWeight = enabledFeatures.some(
+      (feature) => feature.key === "weight" && feature.is_enabled,
+    );
 
     const yearsResult = await client.query<{ year: string }>(
       `SELECT DISTINCT EXTRACT(YEAR FROM receipt_date)::int AS year
@@ -144,6 +147,7 @@ export default async function DashboardPage({
       summariesResult,
       pendingResult,
       bloodPressureLogs,
+      weightLogs,
     ] = await Promise.all([
       client.query<Entity>(
         `SELECT *
@@ -165,6 +169,7 @@ export default async function DashboardPage({
         currency: string;
       }>(pendingSql, yearValues),
       showBloodPressure ? getBloodPressureLogs(client) : Promise.resolve([]),
+      showWeight ? getWeightLogs(client) : Promise.resolve([]),
     ]);
     const averageSystolic =
       bloodPressureLogs.length > 0
@@ -181,6 +186,12 @@ export default async function DashboardPage({
           )
         : null;
     const latestBloodPressure = bloodPressureLogs[0] ?? null;
+    const averageWeight =
+      weightLogs.length > 0
+        ? weightLogs.reduce((sum, log) => sum + Number(log.weight_kg), 0) /
+          weightLogs.length
+        : null;
+    const latestWeight = weightLogs[0] ?? null;
 
     return (
       <main className="min-h-screen bg-background px-6 py-10 text-foreground">
@@ -224,6 +235,20 @@ export default async function DashboardPage({
               count: Number(summary.count),
               total: Number(summary.total ?? 0),
             }))}
+            weightSummary={
+              showWeight
+                ? {
+                    averageWeight,
+                    latestDate: latestWeight
+                      ? latestWeight.log_date.toISOString()
+                      : null,
+                    latestWeight: latestWeight
+                      ? Number(latestWeight.weight_kg)
+                      : null,
+                    totalReadings: weightLogs.length,
+                  }
+                : null
+            }
             year={selectedYear}
           />
         </div>

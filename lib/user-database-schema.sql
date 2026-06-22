@@ -901,7 +901,7 @@ ALTER SEQUENCE public.reminders_id_seq OWNED BY public.reminders.id;
 CREATE TABLE public.weight_logs (
     id integer NOT NULL,
     log_date date DEFAULT CURRENT_DATE NOT NULL,
-    log_time time without time zone,
+    log_time time without time zone DEFAULT CURRENT_TIME,
     person_id integer,
     weight_kg numeric(5,2) NOT NULL,
     notes text,
