@@ -10,6 +10,7 @@ export type Reminder = {
   is_recurring: boolean;
   recurrence_pattern: string | null;
   is_active: boolean;
+  triggered_at: Date | null;
   created_at: Date;
 };
 
@@ -50,10 +51,14 @@ export async function getReminders(client: Client, limit = 500) {
             is_recurring,
             recurrence_pattern,
             is_active,
+            triggered_at,
             created_at
      FROM reminders
      WHERE is_active IS DISTINCT FROM FALSE
-     ORDER BY trigger_date ASC NULLS LAST, created_at DESC
+        OR triggered_at IS NOT NULL
+     ORDER BY is_active DESC,
+              COALESCE(trigger_date, triggered_at::date) ASC NULLS LAST,
+              created_at DESC
      LIMIT $1`,
     [limit],
   );
@@ -98,9 +103,10 @@ export async function updateReminder(
          trigger_month = NULL,
          trigger_day = NULL,
          is_recurring = FALSE,
+         is_active = TRUE,
+         triggered_at = NULL,
          recurrence_pattern = NULL
      WHERE id = $1
-       AND is_active IS DISTINCT FROM FALSE
      RETURNING id,
                reminder_text,
                reminder_type,
@@ -110,6 +116,7 @@ export async function updateReminder(
                is_recurring,
                recurrence_pattern,
                is_active,
+               triggered_at,
                created_at`,
     [id, input.reminder_text, input.trigger_date],
   );
@@ -123,7 +130,10 @@ export async function deleteReminder(client: Client, id: number) {
     `UPDATE reminders
      SET is_active = FALSE
      WHERE id = $1
-       AND is_active IS DISTINCT FROM FALSE
+       AND (
+         is_active IS DISTINCT FROM FALSE
+         OR triggered_at IS NOT NULL
+       )
      RETURNING id`,
     [id],
   );

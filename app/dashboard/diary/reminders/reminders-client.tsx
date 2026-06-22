@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 
 type ReminderItem = {
   id: number;
+  is_active: boolean;
   is_recurring: boolean;
   recurrence_pattern: string | null;
   reminder_text: string;
+  triggered_at: string | null;
   trigger_day: number | null;
   trigger_date: string | null;
   trigger_month: number | null;
@@ -59,6 +61,10 @@ function reminderMatchesDate(reminder: ReminderItem, key: string) {
     return true;
   }
 
+  if (!reminder.is_active && reminder.triggered_at?.slice(0, 10) === key) {
+    return true;
+  }
+
   if (!reminder.is_recurring || !reminder.trigger_month || !reminder.trigger_day) {
     return false;
   }
@@ -71,6 +77,10 @@ function reminderMatchesDate(reminder: ReminderItem, key: string) {
 }
 
 function formatReminderDate(reminder: ReminderItem) {
+  if (!reminder.is_active && reminder.triggered_at) {
+    return `Triggered on ${formatDisplayDate(reminder.triggered_at.slice(0, 10))}`;
+  }
+
   if (reminder.trigger_date) {
     return formatDisplayDate(reminder.trigger_date.slice(0, 10));
   }
@@ -87,6 +97,10 @@ function formatReminderDate(reminder: ReminderItem) {
 }
 
 function getReminderStatus(reminder: ReminderItem) {
+  if (!reminder.is_active && reminder.triggered_at) {
+    return "Past";
+  }
+
   if (reminder.is_recurring) {
     return "Recurring";
   }
@@ -123,6 +137,11 @@ export function RemindersClient({ reminders }: RemindersClientProps) {
     const map = new Map<string, ReminderItem[]>();
 
     for (const reminder of reminders) {
+      if (!reminder.is_active && reminder.triggered_at) {
+        const key = reminder.triggered_at.slice(0, 10);
+        map.set(key, [...(map.get(key) ?? []), reminder]);
+      }
+
       if (reminder.trigger_date) {
         const key = reminder.trigger_date.slice(0, 10);
         map.set(key, [...(map.get(key) ?? []), reminder]);
@@ -369,7 +388,7 @@ export function RemindersClient({ reminders }: RemindersClientProps) {
             </h2>
             <p className="mt-1 text-sm text-foreground/60">
               {showAll
-                ? `${reminders.length} active reminder${reminders.length === 1 ? "" : "s"}`
+                ? `${reminders.length} reminder${reminders.length === 1 ? "" : "s"}`
                 : `${selectedReminders.length} reminder${selectedReminders.length === 1 ? "" : "s"} for this day`}
             </p>
           </div>
