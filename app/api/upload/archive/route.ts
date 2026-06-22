@@ -44,6 +44,22 @@ function getMimeType(file: File) {
   return "application/octet-stream";
 }
 
+function dateOnly(value: Date | string) {
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+
+  const text = String(value);
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) {
+    return text.slice(0, 10);
+  }
+
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime())
+    ? new Date().toISOString().slice(0, 10)
+    : parsed.toISOString().slice(0, 10);
+}
+
 async function getGoogleUser(userId: number) {
   const db = getWebAppDb();
   const result = await db.query<WebAppGoogleUser>(
@@ -134,7 +150,7 @@ async function findDuplicateReceipt({
       values: [
         receipt.record_r_number,
         receipt.transaction_number,
-        String(receipt.receipt_date).slice(0, 10),
+        dateOnly(receipt.receipt_date),
         "",
       ],
     });
@@ -153,7 +169,7 @@ async function findDuplicateReceipt({
       values: [
         receipt.record_r_number,
         receipt.authorization_code,
-        String(receipt.receipt_date).slice(0, 10),
+        dateOnly(receipt.receipt_date),
         "",
       ],
     });
@@ -173,7 +189,7 @@ async function findDuplicateReceipt({
       values: [
         receipt.record_r_number,
         receipt.receipt_number,
-        String(receipt.receipt_date).slice(0, 10),
+        dateOnly(receipt.receipt_date),
         `%${receipt.vendor}%`,
         "",
       ],
@@ -221,7 +237,7 @@ function getMonthName(date: string | Date) {
 }
 
 function getArchiveFilename(receipt: Receipt) {
-  const date = String(receipt.receipt_date).slice(0, 10);
+  const date = dateOnly(receipt.receipt_date);
   return `${receipt.record_r_number}_${slugify(receipt.vendor)}_${date}.jpg`;
 }
 
@@ -303,7 +319,7 @@ export async function POST(request: Request) {
         );
       }
 
-      const receiptDate = String(receipt.receipt_date).slice(0, 10);
+      const receiptDate = dateOnly(receipt.receipt_date);
       const folderId = await ensureFolderPath(
         auth,
         googleUser.google_drive_folder_id,
