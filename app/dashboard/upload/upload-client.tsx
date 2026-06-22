@@ -610,14 +610,12 @@ export function UploadClient({
               : "A Google Drive folder ID is required before archiving."}
           </p>
         </div>
-        {!hasGoogleConnection ? (
-          <a
-            className="inline-flex h-10 items-center rounded-md bg-foreground px-4 text-sm font-medium text-background"
-            href="/api/auth/google"
-          >
-            Connect Google Drive
-          </a>
-        ) : null}
+        <a
+          className="inline-flex h-10 items-center rounded-md bg-foreground px-4 text-sm font-medium text-background transition-opacity hover:opacity-85"
+          href="/api/auth/google"
+        >
+          {hasGoogleConnection ? "Reconnect Google Drive" : "Connect Google Drive"}
+        </a>
       </div>
 
       {!activeReview ? (
