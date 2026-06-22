@@ -923,7 +923,7 @@ function UploadEditCard({
             <p className={display.className}>{display.label}</p>
             {matchOptions.length > 0 ? (
               <label className="mt-2 block">
-                Force match
+                Suggested matches
                 <select
                   className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3"
                   onChange={(event) => onRecordChange(event.currentTarget.value)}
@@ -942,6 +942,17 @@ function UploadEditCard({
                 </select>
               </label>
             ) : null}
+            <label className="mt-3 block">
+              Force match record number
+              <input
+                className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3 uppercase"
+                defaultValue={upload.selected_record_r_number ?? ""}
+                onBlur={(event) =>
+                  onRecordChange(event.currentTarget.value.trim().toUpperCase())
+                }
+                placeholder="PER-R-0001"
+              />
+            </label>
           </div>
         </div>
       ) : null}
