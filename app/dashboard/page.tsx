@@ -23,7 +23,23 @@ function SetupMessage({
   );
 }
 
-export default async function DashboardPage() {
+type DashboardPageProps = {
+  searchParams?: {
+    year?: string | string[];
+  };
+};
+
+function parseYear(value: string | string[] | undefined) {
+  const year = Array.isArray(value) ? value[0] : value;
+  const parsed = Number(year);
+  return Number.isInteger(parsed) && parsed >= 2000 && parsed <= 2100
+    ? parsed
+    : null;
+}
+
+export default async function DashboardPage({
+  searchParams,
+}: DashboardPageProps) {
   const session = await getCurrentSession();
 
   if (!session?.user) {
@@ -39,7 +55,8 @@ export default async function DashboardPage() {
     );
   }
 
-  const year = new Date().getFullYear();
+  const requestedYear = parseYear(searchParams?.year);
+  const currentYear = new Date().getFullYear();
   const client = await getUserDb(
     session.user.supabase_connection_string,
   ).catch(() => null);
@@ -54,6 +71,22 @@ export default async function DashboardPage() {
   }
 
   try {
+    const yearsResult = await client.query<{ year: string }>(
+      `SELECT DISTINCT EXTRACT(YEAR FROM receipt_date)::int AS year
+       FROM receipts
+       WHERE receipt_date IS NOT NULL
+       ORDER BY year DESC`,
+    );
+    const availableYears = yearsResult.rows.map((row) => Number(row.year));
+    const year =
+      requestedYear ??
+      (availableYears.includes(currentYear) ? currentYear : availableYears[0]) ??
+      currentYear;
+
+    if (!availableYears.includes(year)) {
+      availableYears.unshift(year);
+    }
+
     const [entitiesResult, summariesResult, pendingResult] = await Promise.all([
       client.query<Entity>(
         `SELECT *
@@ -103,14 +136,15 @@ export default async function DashboardPage() {
         <div className="mx-auto max-w-6xl">
           <section className="border border-foreground/10 p-5">
             <h1 className="text-2xl font-semibold tracking-normal">
-              Dashboard
-            </h1>
-            <p className="mt-2 text-sm text-foreground/65">
-              Current year expense summary and receipts waiting for upload.
-            </p>
+            Dashboard
+          </h1>
+          <p className="mt-2 text-sm text-foreground/65">
+              Expense summary and receipts waiting for upload.
+          </p>
           </section>
 
           <DashboardClient
+            availableYears={availableYears}
             entities={entitiesResult.rows.map((entity) => ({
               id: entity.id,
               name: entity.name,
@@ -125,6 +159,7 @@ export default async function DashboardPage() {
               count: Number(summary.count),
               total: Number(summary.total ?? 0),
             }))}
+            year={year}
           />
         </div>
       </main>
