@@ -27,16 +27,33 @@ function getCurrentTab(searchParams: RecordsPageProps["searchParams"]) {
   return getParam(searchParams, "tab") === "invoices" ? "invoices" : "receipts";
 }
 
+function parseYear(searchParams: RecordsPageProps["searchParams"]) {
+  const year = getParam(searchParams, "year");
+  if (!year || year === "all") return null;
+
+  const parsed = Number(year);
+  return Number.isInteger(parsed) && parsed >= 2000 && parsed <= 2100
+    ? parsed
+    : null;
+}
+
 function getFilters(searchParams: RecordsPageProps["searchParams"]) {
   const reviewed = getParam(searchParams, "is_reviewed");
   const entityId = getParam(searchParams, "entity_id");
+  const year = parseYear(searchParams);
 
   return {
     entity_id: entityId ? Number(entityId) : undefined,
     is_reviewed:
       reviewed === "true" ? true : reviewed === "false" ? false : undefined,
-    date_from: getParam(searchParams, "date_from") || undefined,
-    date_to: getParam(searchParams, "date_to") || undefined,
+    date_from:
+      year !== null
+        ? `${year}-01-01`
+        : getParam(searchParams, "date_from") || undefined,
+    date_to:
+      year !== null
+        ? `${year}-12-31`
+        : getParam(searchParams, "date_to") || undefined,
     category: getParam(searchParams, "category") || undefined,
     search: getParam(searchParams, "search") || undefined,
     page: Number(getParam(searchParams, "page") || 1),
@@ -91,20 +108,37 @@ function formatMoney(value: string | null, currency: string) {
 function FilterBar({
   entities,
   categories,
+  availableYears,
   searchParams,
   tab,
 }: {
   entities: Entity[];
   categories: string[];
+  availableYears: number[];
   searchParams: RecordsPageProps["searchParams"];
   tab: "receipts" | "invoices";
 }) {
   return (
     <form
       action="/dashboard/records"
-      className="mt-8 grid gap-4 border border-foreground/10 p-4 md:grid-cols-6"
+      className="mt-8 grid gap-4 border border-foreground/10 p-4 md:grid-cols-7"
     >
       <input name="tab" type="hidden" value={tab} />
+      <label className="block text-sm">
+        Year
+        <select
+          className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3"
+          defaultValue={getParam(searchParams, "year") ?? "all"}
+          name="year"
+        >
+          <option value="all">All Years</option>
+          {availableYears.map((year) => (
+            <option key={year} value={year}>
+              {year}
+            </option>
+          ))}
+        </select>
+      </label>
       <label className="block text-sm">
         Entity
         <select
@@ -174,7 +208,7 @@ function FilterBar({
           placeholder={tab === "receipts" ? "Vendor" : "Buyer"}
         />
       </label>
-      <div className="flex items-end gap-3 md:col-span-6">
+      <div className="flex items-end gap-3 md:col-span-7">
         <button
           className="h-10 rounded-md bg-foreground px-4 text-sm font-medium text-background"
           type="submit"
@@ -339,12 +373,39 @@ export default async function RecordsPage({ searchParams }: RecordsPageProps) {
   const client = await getUserDb(session.user.supabase_connection_string);
 
   try {
-    const [entities, receiptCategories, invoiceCategories] = await Promise.all([
+    const [
+      entities,
+      receiptCategories,
+      invoiceCategories,
+      receiptYears,
+      invoiceYears,
+    ] = await Promise.all([
       getEntities(client),
       getReceiptCategories(client),
       getInvoiceCategories(client),
+      client.query<{ year: string }>(
+        `SELECT DISTINCT EXTRACT(YEAR FROM receipt_date)::int AS year
+         FROM receipts
+         WHERE receipt_date IS NOT NULL
+         ORDER BY year DESC`,
+      ),
+      client.query<{ year: string }>(
+        `SELECT DISTINCT EXTRACT(YEAR FROM invoice_date)::int AS year
+         FROM invoices
+         WHERE invoice_date IS NOT NULL
+         ORDER BY year DESC`,
+      ),
     ]);
     const categories = tab === "receipts" ? receiptCategories : invoiceCategories;
+    const selectedYear = parseYear(searchParams);
+    const availableYears = (
+      tab === "receipts" ? receiptYears.rows : invoiceYears.rows
+    ).map((row) => Number(row.year));
+
+    if (selectedYear !== null && !availableYears.includes(selectedYear)) {
+      availableYears.unshift(selectedYear);
+    }
+
     const result =
       tab === "receipts"
         ? await getReceiptsPage(client, filters)
@@ -388,6 +449,7 @@ export default async function RecordsPage({ searchParams }: RecordsPageProps) {
           </div>
 
           <FilterBar
+            availableYears={availableYears}
             categories={categories}
             entities={entities}
             searchParams={searchParams}
