@@ -31,6 +31,7 @@ type DashboardPageProps = {
 
 function parseYear(value: string | string[] | undefined) {
   const year = Array.isArray(value) ? value[0] : value;
+  if (year === "all") return "all";
   const parsed = Number(year);
   return Number.isInteger(parsed) && parsed >= 2000 && parsed <= 2100
     ? parsed
@@ -78,14 +79,55 @@ export default async function DashboardPage({
        ORDER BY year DESC`,
     );
     const availableYears = yearsResult.rows.map((row) => Number(row.year));
-    const year =
+    const selectedYear =
       requestedYear ??
       (availableYears.includes(currentYear) ? currentYear : availableYears[0]) ??
       currentYear;
 
-    if (!availableYears.includes(year)) {
-      availableYears.unshift(year);
+    if (typeof selectedYear === "number" && !availableYears.includes(selectedYear)) {
+      availableYears.unshift(selectedYear);
     }
+
+    const summarySql =
+      selectedYear === "all"
+        ? `SELECT entity_id,
+                  COUNT(*) AS count,
+                  COALESCE(SUM(grand_total), 0) AS total
+           FROM receipts
+           GROUP BY entity_id`
+        : `SELECT entity_id,
+                  COUNT(*) AS count,
+                  COALESCE(SUM(grand_total), 0) AS total
+           FROM receipts
+           WHERE receipt_date >= $1::date
+             AND receipt_date < $2::date
+           GROUP BY entity_id`;
+    const pendingSql =
+      selectedYear === "all"
+        ? `SELECT entity_id,
+                  record_r_number,
+                  vendor,
+                  receipt_date,
+                  grand_total,
+                  currency
+           FROM receipts
+           WHERE attachment_link IS NULL OR attachment_link = ''
+           ORDER BY receipt_date DESC, created_at DESC`
+        : `SELECT entity_id,
+                  record_r_number,
+                  vendor,
+                  receipt_date,
+                  grand_total,
+                  currency
+           FROM receipts
+           WHERE (attachment_link IS NULL OR attachment_link = '')
+             AND receipt_date >= $1::date
+             AND receipt_date < $2::date
+           ORDER BY receipt_date DESC, created_at DESC`;
+    const yearValues =
+      selectedYear === "all"
+        ? []
+        : [`${selectedYear}-01-01`, `${selectedYear + 1}-01-01`];
 
     const [entitiesResult, summariesResult, pendingResult] = await Promise.all([
       client.query<Entity>(
@@ -98,16 +140,7 @@ export default async function DashboardPage({
         entity_id: number;
         count: string;
         total: string | null;
-      }>(
-        `SELECT entity_id,
-                COUNT(*) AS count,
-                COALESCE(SUM(grand_total), 0) AS total
-         FROM receipts
-         WHERE receipt_date >= $1::date
-           AND receipt_date < $2::date
-         GROUP BY entity_id`,
-        [`${year}-01-01`, `${year + 1}-01-01`],
-      ),
+      }>(summarySql, yearValues),
       client.query<{
         entity_id: number;
         record_r_number: string;
@@ -115,20 +148,7 @@ export default async function DashboardPage({
         receipt_date: Date;
         grand_total: string | null;
         currency: string;
-      }>(
-        `SELECT entity_id,
-                record_r_number,
-                vendor,
-                receipt_date,
-                grand_total,
-                currency
-         FROM receipts
-         WHERE (attachment_link IS NULL OR attachment_link = '')
-           AND receipt_date >= $1::date
-           AND receipt_date < $2::date
-         ORDER BY receipt_date DESC, created_at DESC`,
-        [`${year}-01-01`, `${year + 1}-01-01`],
-      ),
+      }>(pendingSql, yearValues),
     ]);
 
     return (
@@ -159,7 +179,7 @@ export default async function DashboardPage({
               count: Number(summary.count),
               total: Number(summary.total ?? 0),
             }))}
-            year={year}
+            year={selectedYear}
           />
         </div>
       </main>

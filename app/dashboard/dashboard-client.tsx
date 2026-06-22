@@ -25,7 +25,7 @@ type DashboardClientProps = {
   entities: DashboardEntity[];
   summaries: ExpenseSummary[];
   pendingReceipts: PendingReceipt[];
-  year: number;
+  year: number | "all";
 };
 
 function money(value: number, currency = "CAD") {
@@ -56,17 +56,18 @@ function ExpenseBlock({
   title: string;
   entity?: DashboardEntity;
   summary: ExpenseSummary;
-  year: number;
+  year: number | "all";
   children?: React.ReactNode;
 }) {
-  const dateFrom = `${year}-01-01`;
-  const dateTo = `${year}-12-31`;
+  const isAllYears = year === "all";
+  const dateFrom = isAllYears ? "" : `${year}-01-01`;
+  const dateTo = isAllYears ? "" : `${year}-12-31`;
   const recordsHref = entity
-    ? `/dashboard/records?tab=receipts&entity_id=${entity.id}&date_from=${dateFrom}&date_to=${dateTo}`
-    : `/dashboard/records?tab=receipts&date_from=${dateFrom}&date_to=${dateTo}`;
+    ? `/dashboard/records?tab=receipts&entity_id=${entity.id}${isAllYears ? "" : `&date_from=${dateFrom}&date_to=${dateTo}`}`
+    : `/dashboard/records?tab=receipts${isAllYears ? "" : `&date_from=${dateFrom}&date_to=${dateTo}`}`;
   const reportsHref = entity
-    ? `/dashboard/reports?type=expense&entity_id=${entity.id}&year=${year}`
-    : `/dashboard/reports?type=expense&year=${year}`;
+    ? `/dashboard/reports?type=expense&entity_id=${entity.id}${isAllYears ? "" : `&year=${year}`}`
+    : `/dashboard/reports?type=expense${isAllYears ? "" : `&year=${year}`}`;
 
   return (
     <section className="rounded-md border border-foreground/10 p-5">
@@ -76,7 +77,7 @@ function ExpenseBlock({
             <h2 className="text-lg font-semibold tracking-normal">{title}</h2>
             <p className="mt-1 text-sm text-foreground/60">
               {summary.count} expense record{summary.count === 1 ? "" : "s"}{" "}
-              in {year}
+              {isAllYears ? "across all years" : `in ${year}`}
             </p>
           </div>
           <p className="text-xl font-semibold">{money(summary.total)}</p>
@@ -185,6 +186,7 @@ export function DashboardClient({
             onChange={(event) => changeYear(event.target.value)}
             value={year}
           >
+            <option value="all">All Years</option>
             {availableYears.map((availableYear) => (
               <option key={availableYear} value={availableYear}>
                 {availableYear}

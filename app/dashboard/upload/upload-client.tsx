@@ -662,6 +662,15 @@ export function UploadClient({
     readyCount === processedCount &&
     hasGoogleFolder &&
     hasGoogleConnection;
+  const progressMessage = isProcessing
+    ? "Reading receipt image data and matching records..."
+    : isArchiving
+      ? "Uploading receipts to Google Drive..."
+      : isSavingReview
+        ? "Saving receipt changes..."
+        : isCancelingReview
+          ? "Canceling this upload..."
+          : "";
 
   return (
     <div className="mt-8">
@@ -685,6 +694,13 @@ export function UploadClient({
           </a>
         ) : null}
       </div>
+
+      {progressMessage ? (
+        <div className="mb-6 flex items-center gap-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950">
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-blue-700 border-t-transparent" />
+          <span className="font-medium">{progressMessage}</span>
+        </div>
+      ) : null}
 
       {!activeReview ? (
         <>
