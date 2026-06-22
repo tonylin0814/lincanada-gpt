@@ -41,6 +41,8 @@ function getFilters(searchParams: RecordsPageProps["searchParams"]) {
   const reviewed = getParam(searchParams, "is_reviewed");
   const entityId = getParam(searchParams, "entity_id");
   const year = parseYear(searchParams);
+  const sortDir = getParam(searchParams, "sort_dir");
+  const sortDirection: "asc" | "desc" = sortDir === "asc" ? "asc" : "desc";
 
   return {
     entity_id: entityId ? Number(entityId) : undefined,
@@ -56,6 +58,8 @@ function getFilters(searchParams: RecordsPageProps["searchParams"]) {
         : getParam(searchParams, "date_to") || undefined,
     category: getParam(searchParams, "category") || undefined,
     search: getParam(searchParams, "search") || undefined,
+    sort_by: getParam(searchParams, "sort_by") || undefined,
+    sort_dir: sortDirection,
     page: Number(getParam(searchParams, "page") || 1),
     per_page: 20,
   };
@@ -105,6 +109,38 @@ function formatMoney(value: string | null, currency: string) {
   }).format(Number(value));
 }
 
+function SortHeader({
+  label,
+  searchParams,
+  sortKey,
+}: {
+  label: string;
+  searchParams: RecordsPageProps["searchParams"];
+  sortKey: string;
+}) {
+  const currentSort = getParam(searchParams, "sort_by");
+  const currentDir = getParam(searchParams, "sort_dir") === "asc" ? "asc" : "desc";
+  const isActive = currentSort === sortKey;
+  const nextDir = isActive && currentDir === "asc" ? "desc" : "asc";
+  const marker = isActive ? (currentDir === "asc" ? "ASC" : "DESC") : "Sort";
+
+  return (
+    <Link
+      className={`inline-flex items-center gap-1 rounded-md px-2 py-1 transition-colors hover:bg-blue-700 hover:text-white ${
+        isActive ? "bg-foreground text-background" : ""
+      }`}
+      href={buildHref(searchParams, {
+        page: 1,
+        sort_by: sortKey,
+        sort_dir: nextDir,
+      })}
+    >
+      <span>{label}</span>
+      <span aria-hidden="true">{marker}</span>
+    </Link>
+  );
+}
+
 function FilterBar({
   entities,
   categories,
@@ -124,6 +160,8 @@ function FilterBar({
       className="mt-8 grid gap-4 border border-foreground/10 p-4 md:grid-cols-7"
     >
       <input name="tab" type="hidden" value={tab} />
+      <input name="sort_by" type="hidden" value={getParam(searchParams, "sort_by") ?? ""} />
+      <input name="sort_dir" type="hidden" value={getParam(searchParams, "sort_dir") ?? ""} />
       <label className="block text-sm">
         Year
         <select
@@ -223,19 +261,39 @@ function FilterBar({
   );
 }
 
-function ReceiptsTable({ receipts }: { receipts: Receipt[] }) {
+function ReceiptsTable({
+  receipts,
+  searchParams,
+}: {
+  receipts: Receipt[];
+  searchParams: RecordsPageProps["searchParams"];
+}) {
   return (
     <div className="mt-6 overflow-x-auto border border-foreground/10">
       <table className="w-full min-w-[880px] border-collapse text-left text-sm">
         <thead className="bg-foreground/5">
           <tr>
-            <th className="px-4 py-3 font-medium">Record #</th>
-            <th className="px-4 py-3 font-medium">Date</th>
-            <th className="px-4 py-3 font-medium">Vendor</th>
-            <th className="px-4 py-3 font-medium">Category</th>
-            <th className="px-4 py-3 font-medium">Total</th>
-            <th className="px-4 py-3 font-medium">Payment Method</th>
-            <th className="px-4 py-3 font-medium">Uploaded</th>
+            <th className="px-2 py-3 font-medium">
+              <SortHeader label="Record #" searchParams={searchParams} sortKey="record" />
+            </th>
+            <th className="px-2 py-3 font-medium">
+              <SortHeader label="Date" searchParams={searchParams} sortKey="date" />
+            </th>
+            <th className="px-2 py-3 font-medium">
+              <SortHeader label="Vendor" searchParams={searchParams} sortKey="vendor" />
+            </th>
+            <th className="px-2 py-3 font-medium">
+              <SortHeader label="Category" searchParams={searchParams} sortKey="category" />
+            </th>
+            <th className="px-2 py-3 font-medium">
+              <SortHeader label="Total" searchParams={searchParams} sortKey="total" />
+            </th>
+            <th className="px-2 py-3 font-medium">
+              <SortHeader label="Payment Method" searchParams={searchParams} sortKey="payment_method" />
+            </th>
+            <th className="px-2 py-3 font-medium">
+              <SortHeader label="Uploaded" searchParams={searchParams} sortKey="uploaded" />
+            </th>
             <th className="px-4 py-3 font-medium">Actions</th>
           </tr>
         </thead>
@@ -272,19 +330,39 @@ function ReceiptsTable({ receipts }: { receipts: Receipt[] }) {
   );
 }
 
-function InvoicesTable({ invoices }: { invoices: Invoice[] }) {
+function InvoicesTable({
+  invoices,
+  searchParams,
+}: {
+  invoices: Invoice[];
+  searchParams: RecordsPageProps["searchParams"];
+}) {
   return (
     <div className="mt-6 overflow-x-auto border border-foreground/10">
       <table className="w-full min-w-[880px] border-collapse text-left text-sm">
         <thead className="bg-foreground/5">
           <tr>
-            <th className="px-4 py-3 font-medium">Record #</th>
-            <th className="px-4 py-3 font-medium">Date</th>
-            <th className="px-4 py-3 font-medium">Buyer</th>
-            <th className="px-4 py-3 font-medium">Category</th>
-            <th className="px-4 py-3 font-medium">Total</th>
-            <th className="px-4 py-3 font-medium">Payment Method</th>
-            <th className="px-4 py-3 font-medium">Uploaded</th>
+            <th className="px-2 py-3 font-medium">
+              <SortHeader label="Record #" searchParams={searchParams} sortKey="record" />
+            </th>
+            <th className="px-2 py-3 font-medium">
+              <SortHeader label="Date" searchParams={searchParams} sortKey="date" />
+            </th>
+            <th className="px-2 py-3 font-medium">
+              <SortHeader label="Buyer" searchParams={searchParams} sortKey="buyer" />
+            </th>
+            <th className="px-2 py-3 font-medium">
+              <SortHeader label="Category" searchParams={searchParams} sortKey="category" />
+            </th>
+            <th className="px-2 py-3 font-medium">
+              <SortHeader label="Total" searchParams={searchParams} sortKey="total" />
+            </th>
+            <th className="px-2 py-3 font-medium">
+              <SortHeader label="Payment Method" searchParams={searchParams} sortKey="payment_method" />
+            </th>
+            <th className="px-2 py-3 font-medium">
+              <SortHeader label="Uploaded" searchParams={searchParams} sortKey="uploaded" />
+            </th>
             <th className="px-4 py-3 font-medium">Actions</th>
           </tr>
         </thead>
@@ -457,9 +535,15 @@ export default async function RecordsPage({ searchParams }: RecordsPageProps) {
           />
 
           {tab === "receipts" ? (
-            <ReceiptsTable receipts={result.rows as Receipt[]} />
+            <ReceiptsTable
+              receipts={result.rows as Receipt[]}
+              searchParams={searchParams}
+            />
           ) : (
-            <InvoicesTable invoices={result.rows as Invoice[]} />
+            <InvoicesTable
+              invoices={result.rows as Invoice[]}
+              searchParams={searchParams}
+            />
           )}
           <Pagination
             page={result.page}

@@ -16,6 +16,8 @@ type RecordFilters = {
   date_to?: string;
   category?: string;
   search?: string;
+  sort_by?: string;
+  sort_dir?: "asc" | "desc";
   page?: number;
   per_page?: number;
 };
@@ -150,6 +152,19 @@ function getPagination(filters: RecordFilters) {
   return { page, per_page, offset };
 }
 
+function getSortClause(
+  filters: RecordFilters,
+  sortColumns: Record<string, string>,
+  defaultSort: string,
+) {
+  const sortColumn = filters.sort_by
+    ? sortColumns[filters.sort_by] ?? null
+    : null;
+  const sortDirection = filters.sort_dir === "asc" ? "ASC" : "DESC";
+
+  return sortColumn ? `${sortColumn} ${sortDirection}` : defaultSort;
+}
+
 export async function getReceipts(client: Client, filters: RecordFilters = {}) {
   const { whereClause, values } = addRecordFilters(
     filters,
@@ -188,11 +203,24 @@ export async function getReceiptsPage(
     "receipt_date",
     "vendor",
   );
+  const orderBy = getSortClause(
+    filters,
+    {
+      category: "category",
+      date: "receipt_date",
+      payment_method: "payment_method",
+      record: "record_r_number",
+      total: "grand_total",
+      uploaded: "(attachment_link IS NOT NULL)",
+      vendor: "vendor",
+    },
+    "receipt_date DESC, created_at DESC",
+  );
   const result = await client.query<ReceiptRow>(
     `SELECT *, COUNT(*) OVER() AS total_count
      FROM receipts
      ${whereClause}
-     ORDER BY receipt_date DESC, created_at DESC
+     ORDER BY ${orderBy}, created_at DESC
      LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
     [...values, per_page, offset],
   );
@@ -251,11 +279,24 @@ export async function getInvoicesPage(
     "invoice_date",
     "buyer_name",
   );
+  const orderBy = getSortClause(
+    filters,
+    {
+      buyer: "buyer_name",
+      category: "category",
+      date: "invoice_date",
+      payment_method: "payment_method",
+      record: "record_i_number",
+      total: "grand_total",
+      uploaded: "(attachment_link IS NOT NULL)",
+    },
+    "invoice_date DESC, created_at DESC",
+  );
   const result = await client.query<InvoiceRow>(
     `SELECT *, COUNT(*) OVER() AS total_count
      FROM invoices
      ${whereClause}
-     ORDER BY invoice_date DESC, created_at DESC
+     ORDER BY ${orderBy}, created_at DESC
      LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
     [...values, per_page, offset],
   );
