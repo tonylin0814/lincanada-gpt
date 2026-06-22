@@ -228,9 +228,9 @@ export function UploadClient({
   const [error, setError] = useState("");
 
   const hasFiles = uploads.length > 0;
-  const readyCount = uploads.filter((upload) => upload.ocr && upload.exif).length;
-  const matchedReadyCount = uploads.filter(
-    (upload) => upload.ocr && upload.exif && upload.selected_record_r_number,
+  const processedCount = uploads.filter((upload) => upload.exif).length;
+  const readyCount = uploads.filter(
+    (upload) => upload.exif && upload.selected_record_r_number,
   ).length;
   const activeReview = savedReviews[activeReviewIndex] ?? null;
   const accepted = useMemo(
@@ -456,7 +456,7 @@ export function UploadClient({
     const failedUploads: UploadFile[] = [];
 
     for (const upload of uploads) {
-      if (!upload.exif || !upload.ocr || !upload.match_result) {
+      if (!upload.exif) {
         failedUploads.push(upload);
         continue;
       }
@@ -477,12 +477,9 @@ export function UploadClient({
       formData.append("image_file", upload.file);
       formData.append("match_action", "link");
       formData.append("record_r_number", selectedRecord);
-      formData.append(
-        "entity_id",
-        String(upload.match_result.match?.entity_id ?? selectedEntityId),
-      );
+      formData.append("entity_id", String(selectedEntityId));
       formData.append("exif", JSON.stringify(upload.exif));
-      formData.append("ocr_data", JSON.stringify(upload.ocr));
+      formData.append("ocr_data", JSON.stringify(upload.ocr ?? emptyOcr));
 
       const response = await fetch("/api/upload/archive", {
         method: "POST",
@@ -593,7 +590,7 @@ export function UploadClient({
 
   const canArchive =
     readyCount > 0 &&
-    matchedReadyCount === readyCount &&
+    readyCount === processedCount &&
     hasGoogleFolder &&
     hasGoogleConnection;
 
@@ -675,7 +672,11 @@ export function UploadClient({
                 key={upload.id}
                 onFieldBlur={updateOcrField}
                 onRecordChange={(value) =>
-                  updateUpload(upload.id, { selected_record_r_number: value })
+                  updateUpload(upload.id, {
+                    error: value ? undefined : upload.error,
+                    selected_record_r_number: value,
+                    status: value ? "Ready" : upload.status,
+                  })
                 }
                 onRemove={() => removeUpload(upload.id)}
                 onTaxBlur={updateOcrTax}
@@ -831,6 +832,23 @@ function UploadEditCard({
               <dd>{upload.exif.gps_lng ?? ""}</dd>
             </dl>
           ) : null}
+
+          {upload.exif ? (
+            <div className="border-t border-foreground/10 pt-3">
+              <p className={display.className}>{display.label}</p>
+              <label className="mt-3 block">
+                Force match record number
+                <input
+                  className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3 uppercase"
+                  defaultValue={upload.selected_record_r_number ?? ""}
+                  onBlur={(event) =>
+                    onRecordChange(event.currentTarget.value.trim().toUpperCase())
+                  }
+                  placeholder="PER-R-0001"
+                />
+              </label>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -924,7 +942,6 @@ function UploadEditCard({
           </fieldset>
 
           <div className="mt-4 border-t border-foreground/10 pt-4 text-sm">
-            <p className={display.className}>{display.label}</p>
             {matchOptions.length > 0 ? (
               <label className="mt-2 block">
                 Suggested matches
@@ -946,17 +963,6 @@ function UploadEditCard({
                 </select>
               </label>
             ) : null}
-            <label className="mt-3 block">
-              Force match record number
-              <input
-                className="mt-2 h-10 w-full rounded-md border border-foreground/20 bg-background px-3 uppercase"
-                defaultValue={upload.selected_record_r_number ?? ""}
-                onBlur={(event) =>
-                  onRecordChange(event.currentTarget.value.trim().toUpperCase())
-                }
-                placeholder="PER-R-0001"
-              />
-            </label>
           </div>
         </div>
       ) : null}
