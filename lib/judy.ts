@@ -96,6 +96,29 @@ type SearchRemindersArgs = {
   limit?: number;
 };
 
+type SearchBloodPressureArgs = {
+  date_from?: string | null;
+  date_to?: string | null;
+  person?: string | null;
+  limit?: number;
+};
+
+type SearchWeightArgs = {
+  date_from?: string | null;
+  date_to?: string | null;
+  person?: string | null;
+  limit?: number;
+};
+
+type SearchHealthRecordsArgs = {
+  date_from?: string | null;
+  date_to?: string | null;
+  person?: string | null;
+  record_type?: string | null;
+  search?: string | null;
+  limit?: number;
+};
+
 type JudyDatabaseHealth = {
   connected: boolean;
   tables: Record<string, boolean>;
@@ -440,6 +463,9 @@ Tool strategy:
 - For spending, meals, vendors, purchases, and item details, use search_expenses or get_spending_summary.
 - For who/where/when/timeline/check-in/diary questions, use search_events and include linked people and receipts.
 - For reminder questions, use search_reminders or get_day_context.
+- For blood pressure questions, use search_blood_pressure_logs before answering.
+- For weight questions, use search_weight_logs before answering.
+- For medical document or health history questions, use search_health_records before answering.
 - Use more than one tool when the question crosses domains. Meal companion questions often require expenses plus events plus linked people.
 - For follow-up questions, use conversation context. "this restaurant", "that place", "there", "這個餐廳", "那家店", and "那裡" usually refer to the most recent vendor/place discussed.
 
@@ -459,6 +485,7 @@ Common reasoning patterns:
 - Reminders: read reminders only. Active reminders have active status; never mark them done or triggered.
 - Events/timeline: combine events, people, places, and linked receipts.
 - Health: summarize records and trends only. If diagnosis or treatment is asked, say: "I can summarize what your records show, but I cannot diagnose or recommend treatment. Please review this with a qualified health professional if you are concerned."
+- Blood pressure: summarize recent systolic/diastolic readings, dates, pulse if available, and whether the available readings appear higher/lower/stable. Do not diagnose.
 
 Answer style:
 - Interpret records. Do not dump raw rows.
@@ -801,6 +828,117 @@ const toolDefinitions = [
           "person",
           "place",
           "reminder_type",
+          "limit",
+        ],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "search_blood_pressure_logs",
+      description:
+        "Search read-only blood pressure logs by date and person. Use for blood pressure status, recent readings, and trends.",
+      strict: true,
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          date_from: {
+            type: ["string", "null"],
+            description: "Start date inclusive, YYYY-MM-DD. Use null if not needed.",
+          },
+          date_to: {
+            type: ["string", "null"],
+            description: "End date exclusive, YYYY-MM-DD. Use null if not needed.",
+          },
+          person: {
+            type: ["string", "null"],
+            description: "Person search text. Use null if not needed.",
+          },
+          limit: {
+            type: "number",
+            description: "Maximum logs to return. Prefer 20 or fewer.",
+          },
+        },
+        required: ["date_from", "date_to", "person", "limit"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "search_weight_logs",
+      description:
+        "Search read-only weight logs by date and person. Use for weight history and trends.",
+      strict: true,
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          date_from: {
+            type: ["string", "null"],
+            description: "Start date inclusive, YYYY-MM-DD. Use null if not needed.",
+          },
+          date_to: {
+            type: ["string", "null"],
+            description: "End date exclusive, YYYY-MM-DD. Use null if not needed.",
+          },
+          person: {
+            type: ["string", "null"],
+            description: "Person search text. Use null if not needed.",
+          },
+          limit: {
+            type: "number",
+            description: "Maximum logs to return. Prefer 20 or fewer.",
+          },
+        },
+        required: ["date_from", "date_to", "person", "limit"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "search_health_records",
+      description:
+        "Search read-only health document records by date, person, type, or text.",
+      strict: true,
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          date_from: {
+            type: ["string", "null"],
+            description: "Start date inclusive, YYYY-MM-DD. Use null if not needed.",
+          },
+          date_to: {
+            type: ["string", "null"],
+            description: "End date exclusive, YYYY-MM-DD. Use null if not needed.",
+          },
+          person: {
+            type: ["string", "null"],
+            description: "Person search text. Use null if not needed.",
+          },
+          record_type: {
+            type: ["string", "null"],
+            description: "Health record type. Use null if not needed.",
+          },
+          search: {
+            type: ["string", "null"],
+            description: "Text to search in title, facility, doctor, summary, interpretation, notes, or key terms.",
+          },
+          limit: {
+            type: "number",
+            description: "Maximum records to return. Prefer 20 or fewer.",
+          },
+        },
+        required: [
+          "date_from",
+          "date_to",
+          "person",
+          "record_type",
+          "search",
           "limit",
         ],
       },
@@ -1382,6 +1520,189 @@ async function searchReminders(client: Client, args: SearchRemindersArgs) {
   });
 }
 
+async function searchBloodPressureLogs(
+  client: Client,
+  args: SearchBloodPressureArgs,
+) {
+  const values: unknown[] = [];
+  const filters: string[] = [];
+
+  if (args.date_from) {
+    values.push(args.date_from);
+    filters.push(`b.log_date >= $${values.length}`);
+  }
+
+  if (args.date_to) {
+    values.push(args.date_to);
+    filters.push(`b.log_date < $${values.length}`);
+  }
+
+  if (args.person) {
+    values.push(`%${args.person}%`);
+    filters.push(`p.canonical_name ILIKE $${values.length}`);
+  }
+
+  const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+  const limit = clampLimit(args.limit, 30);
+  values.push(limit);
+
+  return withReadonlyTransaction(client, async () => {
+    const result = await client.query(
+      `
+        SELECT
+          b.id AS log_id,
+          b.log_date,
+          b.log_time,
+          p.canonical_name AS person_name,
+          b.systolic,
+          b.diastolic,
+          b.pulse,
+          b.arm,
+          b.position,
+          b.device,
+          b.notes,
+          b.created_at
+        FROM blood_pressure_logs b
+        LEFT JOIN people p ON p.id = b.person_id
+        ${whereClause}
+        ORDER BY b.log_date DESC, b.log_time DESC NULLS LAST, b.created_at DESC
+        LIMIT $${values.length}
+      `,
+      values,
+    );
+
+    return {
+      blood_pressure_logs: result.rows,
+      count: result.rowCount,
+    };
+  });
+}
+
+async function searchWeightLogs(client: Client, args: SearchWeightArgs) {
+  const values: unknown[] = [];
+  const filters: string[] = [];
+
+  if (args.date_from) {
+    values.push(args.date_from);
+    filters.push(`w.log_date >= $${values.length}`);
+  }
+
+  if (args.date_to) {
+    values.push(args.date_to);
+    filters.push(`w.log_date < $${values.length}`);
+  }
+
+  if (args.person) {
+    values.push(`%${args.person}%`);
+    filters.push(`p.canonical_name ILIKE $${values.length}`);
+  }
+
+  const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+  const limit = clampLimit(args.limit, 30);
+  values.push(limit);
+
+  return withReadonlyTransaction(client, async () => {
+    const result = await client.query(
+      `
+        SELECT
+          w.id AS log_id,
+          w.log_date,
+          w.log_time,
+          p.canonical_name AS person_name,
+          w.weight_kg,
+          w.notes,
+          w.created_at
+        FROM weight_logs w
+        LEFT JOIN people p ON p.id = w.person_id
+        ${whereClause}
+        ORDER BY w.log_date DESC, w.log_time DESC NULLS LAST, w.created_at DESC
+        LIMIT $${values.length}
+      `,
+      values,
+    );
+
+    return {
+      weight_logs: result.rows,
+      count: result.rowCount,
+    };
+  });
+}
+
+async function searchHealthRecords(
+  client: Client,
+  args: SearchHealthRecordsArgs,
+) {
+  const values: unknown[] = [];
+  const filters: string[] = [];
+
+  if (args.date_from) {
+    values.push(args.date_from);
+    filters.push(`h.record_date >= $${values.length}`);
+  }
+
+  if (args.date_to) {
+    values.push(args.date_to);
+    filters.push(`h.record_date < $${values.length}`);
+  }
+
+  if (args.person) {
+    values.push(`%${args.person}%`);
+    filters.push(
+      `(p.canonical_name ILIKE $${values.length} OR h.patient_name ILIKE $${values.length})`,
+    );
+  }
+
+  if (args.record_type) {
+    values.push(`%${args.record_type}%`);
+    filters.push(`h.record_type ILIKE $${values.length}`);
+  }
+
+  if (args.search) {
+    values.push(`%${args.search}%`);
+    filters.push(
+      `(h.title ILIKE $${values.length} OR h.facility ILIKE $${values.length} OR h.doctor ILIKE $${values.length} OR h.summary ILIKE $${values.length} OR h.ai_interpretation ILIKE $${values.length} OR h.notes ILIKE $${values.length})`,
+    );
+  }
+
+  const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+  const limit = clampLimit(args.limit, 20);
+  values.push(limit);
+
+  return withReadonlyTransaction(client, async () => {
+    const result = await client.query(
+      `
+        SELECT
+          h.id AS health_record_id,
+          h.record_hr_number AS record_number,
+          h.record_type,
+          h.record_date,
+          h.title,
+          h.facility,
+          h.doctor,
+          h.patient_name,
+          p.canonical_name AS person_name,
+          h.tags,
+          h.key_terms,
+          h.summary,
+          h.ai_interpretation,
+          h.notes,
+          h.created_at
+        FROM health_records h
+        LEFT JOIN people p ON p.id = h.person_id
+        ${whereClause}
+        ORDER BY h.record_date DESC, h.created_at DESC
+        LIMIT $${values.length}
+      `,
+      values,
+    );
+
+    return {
+      health_records: result.rows,
+      count: result.rowCount,
+    };
+  });
+}
+
 async function getDayContext(client: Client, args: DayContextArgs) {
   const dateTo = nextDate(args.date);
   const expenses = args.include_expenses
@@ -1452,6 +1773,18 @@ async function runJudyTool(
 
   if (name === "search_reminders") {
     return searchReminders(client, args as SearchRemindersArgs);
+  }
+
+  if (name === "search_blood_pressure_logs") {
+    return searchBloodPressureLogs(client, args as SearchBloodPressureArgs);
+  }
+
+  if (name === "search_weight_logs") {
+    return searchWeightLogs(client, args as SearchWeightArgs);
+  }
+
+  if (name === "search_health_records") {
+    return searchHealthRecords(client, args as SearchHealthRecordsArgs);
   }
 
   return { error: "That read-only tool is not available." };
